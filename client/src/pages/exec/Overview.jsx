@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { baht, num, time } from '../../lib/format'
-import { Badge, Bar, Button, Card, Empty, ErrorBox, Kpi, Loading, PageHeader } from '../../components/ui'
+import { Badge, Bar, Button, Card, Empty, ErrorBox, Kpi, Loading, PageHeader, Select } from '../../components/ui'
 import LineChart, { LegendTotals } from '../../components/LineChart'
 
 const RANGES = [7, 30, 90]
@@ -60,9 +60,7 @@ export default function Overview() {
                 sub={`ข้อมูลทุกสาขา อัปเดตล่าสุด ${time(new Date())}`}
                 actions={
                     <>
-                        <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="h-11 rounded-[14px] bg-white px-3.5 text-sm">
-                            {RANGES.map((d) => <option key={d} value={d}>{d} วันล่าสุด</option>)}
-                        </select>
+                        <Select variant="pill" ariaLabel="ช่วงเวลา" value={days} onChange={(v) => setDays(Number(v))} options={RANGES.map((d) => [d, `${d} วันล่าสุด`])} align="right" />
                         <Button onClick={() => exportReport(data)}>ส่งออกรายงาน</Button>
                     </>
                 }
@@ -166,7 +164,7 @@ function Fleet({ vehicles }) {
             <div className="relative mx-auto my-4 size-[190px]">
                 <svg viewBox="0 0 190 190" className="-rotate-90">
                     <circle cx="95" cy="95" r="78" fill="none" stroke="#eef0ed" strokeWidth="20" />
-                    <circle cx="95" cy="95" r="78" fill="none" stroke="#22a45d" strokeWidth="20" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} />
+                    <circle className="bl-gauge" cx="95" cy="95" r="78" fill="none" stroke="#22a45d" strokeWidth="20" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} />
                 </svg>
                 <div className="absolute inset-0 grid place-content-center text-center">
                     <div className="text-[34px] font-semibold">{pct}%</div>

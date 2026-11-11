@@ -23,6 +23,13 @@ router.post('/notifications/read-all', authCheck, handle(async (req, res) => {
     res.json({ ok: true })
 }))
 
+// อ่านทีละรายการ (เช่นกดกล่องแจ้งเตือนที่เด้งขึ้นมา) — ทำได้เฉพาะรายการที่ผู้ใช้คนนี้มีสิทธิ์เห็น
+router.post('/notifications/:id/read', authCheck, handle(async (req, res) => {
+    const [w, p] = notifWhere(req.user)
+    const r = await query(`UPDATE notification SET read_at = UTC_TIMESTAMP(3) WHERE id = ? AND ${w} AND read_at IS NULL`, [Number(req.params.id), ...p])
+    res.json({ ok: true, updated: r.affectedRows })
+}))
+
 // ภาพรวมทุกสาขา (Admin / ผู้บริหาร) เทียบกับช่วงเวลาก่อนหน้าที่ยาวเท่ากัน
 const periodStats = (from, to) =>
     one(

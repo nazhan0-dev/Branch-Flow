@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Phone } from 'lucide-react'
+import { Phone, Search, X } from 'lucide-react'
 import api from '../../api/client'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { TRIP_STATUS, num, time } from '../../lib/format'
-import TripMap from '../../components/TripMap'
-import { Avatar, Badge, Button, Card, Empty, ErrorBox, Loading, SearchInput, StatusBadge, Timeline } from '../../components/ui'
+import TripMap, { MAP_COLORS } from '../../components/TripMap'
+import { Avatar, Badge, Button, Card, Empty, ErrorBox, Loading, Select, StatusBadge, Timeline } from '../../components/ui'
 
 const ACTIVE = ['assigned', 'accepted', 'on_route']
 const FILTERS = [
@@ -30,6 +30,9 @@ export default function LiveMap({ readOnly }) {
     const [trucks, setTrucks] = useState({}) // tripId → ตำแหน่งล่าสุด
     const [q, setQ] = useState('')
     const [status, setStatus] = useState('active')
+    // ค้นหาแล้วพาแผนที่ไป: focus = คำสั่งให้แผนที่ (key ใหม่ = เล่นใหม่) · wantTrip = รอให้เที่ยวที่เลือกโหลดเสร็จก่อน
+    const [focus, setFocus] = useState(null)
+    const [wantTrip, setWantTrip] = useState(null)
 
     const active = useMemo(() => (list.data || []).filter((t) => ACTIVE.includes(t.status)), [list.data])
     const selectedId = Number(id) || active.find((t) => t.status === 'on_route')?.id || active[0]?.id || list.data?.[0]?.id
@@ -41,6 +44,12 @@ export default function LiveMap({ readOnly }) {
     useEffect(() => {
         loadTrip()
     }, [loadTrip])
+    useEffect(() => {
+        if (wantTrip && trip?.id === wantTrip) {
+            setFocus({ key: Date.now() })
+            setWantTrip(null)
+        }
+    }, [trip, wantTrip])
 
     useEffect(() => {
         if (!list.data) return
@@ -83,15 +92,22 @@ export default function LiveMap({ readOnly }) {
 
     return (
         <>
-            <TripMap trip={trip} truck={trip && trucks[trip.id]} trucks={others} branches={bs} labels className="h-[460px] md:h-[540px]">
+            {/* fitPad: เว้นที่ด้านบนให้แถบค้นหา และด้านล่างให้คำอธิบายสี หมุดจะได้ไม่ถูกบัง */}
+            <TripMap trip={trip} truck={trip && trucks[trip.id]} trucks={others} branches={bs} labels fitPad={[120, 80]} focus={focus} className="h-[460px] md:h-[540px]">
                 <div className="absolute inset-x-4 top-4 z-[500] flex flex-wrap gap-2.5">
-                    <SearchInput value={q} onChange={setQ} placeholder="ค้นหาสาขา คนขับ หรือทะเบียนรถ" className="min-w-[200px] flex-1 border-0 shadow-sm" />
-                    <label className="flex h-11 items-center gap-1.5 rounded-[14px] bg-white px-3.5 text-sm shadow-sm">
-                        <span className="text-muted">สถานะ</span>
-                        <select value={status} onChange={(e) => setStatus(e.target.value)} className="bg-transparent font-semibold outline-none">
-                            {FILTERS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                        </select>
-                    </label>
+                    <MapSearch
+                        value={q}
+                        onChange={setQ}
+                        trips={all}
+                        branches={bs.filter((b) => !b.isWarehouse)}
+                        onPickTrip={(t) => {
+                            setWantTrip(t.id)
+                            if (t.id !== selectedId) navigate(`${base}/${t.id}`)
+                        }}
+                        onPickBranch={(b) => setFocus({ lat: b.lat, lng: b.lng, key: Date.now() })}
+                    />
+                    <span className="ml-auto" />
+                    <Select variant="pill" label="สถานะ" value={status} onChange={setStatus} options={FILTERS} align="right" />
                     {!readOnly && <Button onClick={() => navigate('/admin/planner')}>+ สร้างเที่ยวส่ง</Button>}
                 </div>
 
@@ -102,19 +118,28 @@ export default function LiveMap({ readOnly }) {
                             [next?.eta ? time(next.eta) : trip.status === 'completed' ? 'ครบ' : '–', 'ถึงจุดถัดไป'],
                             [`${done}/${trip.stopCount}`, 'จุดส่ง'],
                         ].map(([v, l]) => (
-                            <div key={l} className="rounded-[18px] bg-ink px-5 py-3.5 text-center text-white">
-                                <div className="text-[22px] font-semibold">{v}</div>
-                                <div className="text-[11px] text-[#b9beb7]">{l}</div>
+                            <div key={l} className="rounded-[14px] bg-ink px-4 py-2.5 text-center text-white">
+                                <div className="text-lg leading-tight font-semibold">{v}</div>
+                                <div className="text-[10px] text-[#b9beb7]">{l}</div>
                             </div>
                         ))}
                     </div>
                 )}
 
-                <div className="absolute bottom-4 left-4 z-[500] flex flex-wrap gap-x-4 gap-y-1 rounded-[14px] bg-white px-4 py-2.5 text-xs shadow-sm">
-                    <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-full bg-brand" />กำลังส่ง {onRoute.length}</span>
-                    <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-full bg-ink" />รอออกรถ {all.filter((t) => ['assigned', 'accepted'].includes(t.status)).length}</span>
-                    <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-full bg-warn" />ใกล้หมด {lowBranches} สาขา</span>
-                    <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-full bg-danger" />หมด {outBranches} สาขา</span>
+                {/* คำอธิบายสี 2 กลุ่ม: เที่ยวส่ง (เส้น = เส้นทาง) / สต็อกสาขา (จุด = หมุดสาขา) — สีตรงกับ MAP_COLORS ใน TripMap */}
+                <div className="absolute bottom-4 left-4 z-[500] flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-[14px] bg-white px-4 py-2.5 text-xs shadow-sm">
+                    <span className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
+                        <b className="font-semibold text-muted">เที่ยวส่ง</b>
+                        <span className="flex items-center gap-1.5"><i className="h-1 w-4 rounded-full" style={{ background: MAP_COLORS.onRoute }} />กำลังส่ง {onRoute.length}</span>
+                        <span className="flex items-center gap-1.5"><i className="h-1 w-4 rounded-full" style={{ background: MAP_COLORS.waiting }} />รอออกรถ {all.filter((t) => ['assigned', 'accepted'].includes(t.status)).length}</span>
+                        <span className="flex items-center gap-1.5"><i className="h-1 w-4 rounded-full" style={{ background: MAP_COLORS.done }} />ส่งครบ {all.filter((t) => t.status === 'completed').length}</span>
+                    </span>
+                    <span aria-hidden className="hidden h-4 w-px bg-line sm:block" />
+                    <span className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
+                        <b className="font-semibold text-muted">สต็อกสาขา</b>
+                        <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-full" style={{ background: MAP_COLORS.low }} />ใกล้หมด {lowBranches}</span>
+                        <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-full" style={{ background: MAP_COLORS.out }} />หมด {outBranches}</span>
+                    </span>
                 </div>
             </TripMap>
 
@@ -124,6 +149,144 @@ export default function LiveMap({ readOnly }) {
                 <FleetCard vehicles={vehicles.data} />
             </div>
         </>
+    )
+}
+
+// ช่องค้นหาบนแผนที่: ปกติหดเป็นปุ่มแว่นขยายริมซ้าย กดแล้วค่อยกางออก
+// หดกลับเมื่อคลิกที่อื่นตอนช่องว่าง หรือกด Esc (ล้างคำค้นด้วย) · มีคำค้นอยู่จะกางค้างไว้
+// พิมพ์แล้วขึ้นรายการผลลัพธ์ (เที่ยวส่ง / สาขา) เลือกแล้วแผนที่พาไปที่นั่น
+function MapSearch({ value, onChange, trips = [], branches = [], onPickTrip, onPickBranch }) {
+    const [open, setOpen] = useState(!!value)
+    const [focused, setFocused] = useState(false)
+    const [active, setActive] = useState(0)
+    const input = useRef(null)
+    const expanded = open || !!value
+    const ql = value.trim().toLowerCase()
+    const results = useMemo(() => {
+        if (!ql) return []
+        const tr = trips
+            .filter((t) => [t.code, t.driverName, t.plate, ...t.stopNames].join(' ').toLowerCase().includes(ql))
+            .slice(0, 5)
+            .map((t) => ({ kind: 'trip', key: `t${t.id}`, item: t }))
+        const br = branches
+            .filter((b) => `${b.name} ${b.code}`.toLowerCase().includes(ql))
+            .slice(0, 5)
+            .map((b) => ({ kind: 'branch', key: `b${b.id}`, item: b }))
+        return [...tr, ...br]
+    }, [ql, trips, branches])
+    const showResults = focused && ql && expanded
+    const pick = (r) => {
+        if (!r) return
+        if (r.kind === 'trip') onPickTrip?.(r.item)
+        else onPickBranch?.(r.item)
+        setFocused(false)
+        input.current?.blur()
+    }
+    const expand = () => {
+        setOpen(true)
+        requestAnimationFrame(() => input.current?.focus())
+    }
+    const collapse = () => {
+        onChange('')
+        setOpen(false)
+        input.current?.blur()
+    }
+    return (
+        <div className="relative min-w-0 flex-1 transition-[max-width] duration-300 ease-[var(--ease-out)]" style={{ maxWidth: expanded ? '100%' : 44 }}>
+            <div className={`flex h-11 items-center overflow-hidden rounded-[14px] bg-white text-sm shadow-sm transition-shadow ${expanded ? 'focus-within:shadow-[0_0_0_4px_rgba(20,22,20,0.08)]' : 'hover:bg-soft'}`}>
+                <button
+                    type="button"
+                    aria-label="ค้นหาสาขา คนขับ หรือทะเบียนรถ"
+                    aria-expanded={expanded}
+                    onClick={() => (expanded ? input.current?.focus() : expand())}
+                    className="grid size-11 shrink-0 place-items-center text-[#9aa097] hover:text-ink"
+                >
+                    <Search size={17} />
+                </button>
+                <input
+                    ref={input}
+                    value={value}
+                    tabIndex={expanded ? 0 : -1}
+                    role="combobox"
+                    aria-expanded={!!showResults}
+                    aria-controls="map-search-results"
+                    aria-activedescendant={showResults && results[active] ? `msr-${results[active].key}` : undefined}
+                    onChange={(e) => {
+                        onChange(e.target.value)
+                        setActive(0)
+                        setFocused(true)
+                    }}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => {
+                        setFocused(false)
+                        if (!value) setOpen(false)
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') return collapse()
+                        if (!showResults) return
+                        if (e.key === 'ArrowDown') {
+                            e.preventDefault()
+                            setActive((a) => Math.min(results.length - 1, a + 1))
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault()
+                            setActive((a) => Math.max(0, a - 1))
+                        } else if (e.key === 'Enter') {
+                            e.preventDefault()
+                            pick(results[active])
+                        }
+                    }}
+                    placeholder="ค้นหาสาขา คนขับ หรือทะเบียนรถ"
+                    className="min-w-0 flex-1 bg-transparent pr-3 outline-none placeholder:text-faint"
+                />
+                {value && (
+                    <button type="button" aria-label="ล้างคำค้น" onClick={collapse} className="mr-2 grid size-7 shrink-0 place-items-center rounded-lg text-muted hover:bg-soft">
+                        <X size={15} />
+                    </button>
+                )}
+            </div>
+
+            {showResults && (
+                <div id="map-search-results" role="listbox" className="bl-pop absolute inset-x-0 top-[calc(100%+6px)] max-w-[440px] overflow-hidden rounded-2xl border border-line bg-white p-1.5 shadow-[0_12px_32px_rgba(20,22,20,0.14)]">
+                    {results.length === 0 && <div className="px-3 py-3 text-center text-sm text-muted">ไม่พบเที่ยวหรือสาขาที่ตรงกับ “{value}”</div>}
+                    {results.map((r, i) => {
+                        const first = i === 0 || results[i - 1].kind !== r.kind
+                        const t = r.item
+                        return (
+                            <div key={r.key}>
+                                {first && <div className="px-3 pt-1.5 pb-1 text-[11px] font-semibold text-faint">{r.kind === 'trip' ? 'เที่ยวส่ง' : 'สาขา'}</div>}
+                                <div
+                                    id={`msr-${r.key}`}
+                                    role="option"
+                                    aria-selected={i === active}
+                                    onMouseEnter={() => setActive(i)}
+                                    onMouseDown={(e) => e.preventDefault()} // ไม่ให้ช่องค้นหาเสียโฟกัสก่อนเลือก
+                                    onClick={() => pick(r)}
+                                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm ${i === active ? 'bg-soft' : ''}`}
+                                >
+                                    {r.kind === 'trip' ? (
+                                        <>
+                                            <span className="min-w-0">
+                                                <span className="font-semibold">{t.code}</span>
+                                                <span className="block truncate text-xs text-muted">{t.driverName} · {t.plate} · {t.stopNames.join(' → ')}</span>
+                                            </span>
+                                            <StatusBadge map={TRIP_STATUS} value={t.status} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="min-w-0">
+                                                <span className="font-semibold">สาขา{t.name}</span>
+                                                <span className="block truncate text-xs text-muted">{t.code} · {t.region}</span>
+                                            </span>
+                                            {t.outItems > 0 ? <Badge tone="danger">หมด {t.outItems}</Badge> : t.lowItems > 0 ? <Badge tone="warn">ใกล้หมด {t.lowItems}</Badge> : <Badge tone="brand">ปกติ</Badge>}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+        </div>
     )
 }
 
@@ -144,10 +307,16 @@ function TripCard({ trip, trips, selectedId, onSelect }) {
     return (
         <Card className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
-                <select value={selectedId} onChange={(e) => onSelect(e.target.value)} className="-ml-1 min-w-0 truncate bg-transparent text-lg font-semibold outline-none">
-                    {!trips.some((t) => t.id === trip.id) && <option value={trip.id}>เที่ยวส่ง {trip.code}</option>}
-                    {trips.map((t) => <option key={t.id} value={t.id}>เที่ยวส่ง {t.code}</option>)}
-                </select>
+                <Select
+                    variant="ghost"
+                    ariaLabel={`เลือกเที่ยวส่ง (ตอนนี้ ${trip.code})`}
+                    value={selectedId}
+                    onChange={onSelect}
+                    options={[
+                        ...(trips.some((t) => t.id === trip.id) ? [] : [{ value: trip.id, label: `เที่ยวส่ง ${trip.code}`, hint: TRIP_STATUS[trip.status]?.[0] }]),
+                        ...trips.map((t) => ({ value: t.id, label: `เที่ยวส่ง ${t.code}`, hint: TRIP_STATUS[t.status]?.[0] })),
+                    ]}
+                />
                 <StatusBadge map={TRIP_STATUS} value={trip.status} />
             </div>
             <div className="flex items-center gap-3">
@@ -202,14 +371,18 @@ function FleetCard({ vehicles }) {
     const pct = v.length ? run / v.length : 0
     const R = 90
     const arc = Math.PI * R
+    const ARC = 'M20 110 A90 90 0 0 1 200 110'
     return (
         <Card className="flex flex-col">
             <div className="text-lg font-semibold">สถานะรถ</div>
             <div className="text-xs text-muted">รถทั้งหมด {v.length} คัน</div>
             <div className="relative mx-auto mt-4 w-[220px]">
-                <svg viewBox="0 0 220 120" className="w-full">
-                    <path d="M20 110 A90 90 0 0 1 200 110" fill="none" stroke="#eef0ed" strokeWidth="22" strokeLinecap="round" />
-                    <path d="M20 110 A90 90 0 0 1 200 110" fill="none" stroke="#22a45d" strokeWidth="22" strokeLinecap="round" strokeDasharray={`${arc * pct} ${arc}`} />
+                <svg viewBox="-6 -6 232 132" className="w-full" role="img" aria-label={`รถกำลังวิ่ง ${run} จาก ${v.length} คัน`}>
+                    {/* ขอบนอกแบบเดียวกับจุดไทม์ไลน์: เส้นเทาอ่อน → ช่องขาว → แถบเกจ (วาดเส้นใหญ่ซ้อนกัน ปลายมนจึงมีขอบด้วย) */}
+                    <path className="bl-gauge-ring" pathLength="1" d={ARC} fill="none" stroke="var(--color-line)" strokeWidth="29" strokeLinecap="round" />
+                    <path d={ARC} fill="none" stroke="#fff" strokeWidth="26" strokeLinecap="round" />
+                    <path d={ARC} fill="none" stroke="#eef0ed" strokeWidth="22" strokeLinecap="round" />
+                    <path className="bl-gauge" d={ARC} fill="none" stroke="#22a45d" strokeWidth="22" strokeLinecap="round" strokeDasharray={`${arc * pct} ${arc}`} />
                 </svg>
                 <div className="absolute inset-x-0 bottom-0 text-center">
                     <span className="text-[32px] font-semibold">{run}</span><span className="text-lg text-muted">/{v.length}</span>

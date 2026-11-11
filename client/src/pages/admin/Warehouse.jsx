@@ -4,7 +4,7 @@ import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { baht, num } from '../../lib/format'
-import { Badge, Button, Card, Empty, ErrorBox, Kpi, Loading, Modal, Notice, PageHeader, Product, SearchInput, Stepper, Table } from '../../components/ui'
+import { Badge, Button, Card, Empty, ErrorBox, Kpi, Loading, Modal, Notice, PageHeader, Product, SearchInput, Select, Stepper, Table } from '../../components/ui'
 
 // ส่งออกตารางเป็น CSV (เปิดใน Excel ได้ ใส่ BOM ให้ภาษาไทยไม่เพี้ยน)
 const exportCsv = (rows) => {
@@ -206,10 +206,13 @@ function BuyModal({ state, products, onClose, onDone }) {
     return (
         <Modal open={!!state} onClose={onClose} title="สั่งซื้อเข้าคลัง" width={440}>
             <div className="flex flex-col gap-3">
-                <select value={pid} onChange={(e) => setPid(e.target.value)} className="h-11 rounded-xl border border-line bg-white px-3.5 text-sm">
-                    <option value="">เลือกสินค้า</option>
-                    {products.map((p) => <option key={p.productId} value={p.productId}>{p.name} · {p.sku} (ว่าง {p.available})</option>)}
-                </select>
+                <Select
+                    ariaLabel="เลือกสินค้า"
+                    placeholder="เลือกสินค้า"
+                    value={pid}
+                    onChange={(v) => setPid(String(v))}
+                    options={products.map((p) => ({ value: p.productId, label: `${p.name} · ${p.sku}`, hint: `ว่าง ${num(p.available)}` }))}
+                />
                 <div className="flex items-center justify-between"><span className="text-sm text-muted">จำนวน</span><Stepper value={qty} min={1} onChange={setQty} /></div>
                 <Notice tone="neutral">ในเดโมนี้ ของจะเข้าคลังทันทีเหมือนซัพพลายเออร์ส่งมาถึงแล้ว</Notice>
                 <ErrorBox>{err}</ErrorBox>

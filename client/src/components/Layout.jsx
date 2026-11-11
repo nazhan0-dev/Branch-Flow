@@ -55,13 +55,23 @@ const useActive = () => {
 }
 
 const Logo = ({ size = 36 }) => (
-    <div className="grid shrink-0 place-items-center rounded-xl bg-ink font-bold text-white" style={{ width: size, height: size, fontSize: size * 0.42 }}>BL</div>
+    // โลโก้ใช้สีเขียวของแบรนด์ ไม่ซ้ำกับปุ่มเมนูที่เลือกอยู่ (พื้นดำ)
+    // วาดเป็น SVG: ฟอนต์ไทยเผื่อที่สระบน/ล่างไว้ อักษรอังกฤษจัดกลางด้วย flex/grid จะเยื้องขึ้น
+    // จึงวางเส้นฐานเองที่ กึ่งกลาง + ครึ่งหนึ่งของความสูงตัวพิมพ์ใหญ่ (cap height ≈ 0.7em)
+    <svg aria-hidden width={size} height={size} viewBox="0 0 100 100" className="shrink-0 select-none">
+        <circle cx="50" cy="50" r="50" fill="var(--color-brand)" />
+        {/* x=49: เนื้อตัวอักษร "BL" เยื้องขวาจากจุดกึ่งกลางเล็กน้อย (วัดจากภาพจริง) ขยับชดเชย */}
+        <text x="49" y="50" dy="0.35em" textAnchor="middle" fontSize="40" fontWeight="700" fill="#fff" fontFamily="inherit">BL</text>
+    </svg>
 )
 
 export default function Layout({ children }) {
     const { user, logout } = useAuth()
     const navigate = useNavigate()
     const isActive = useActive()
+    const { pathname } = useLocation()
+    // animation เปลี่ยนหน้าเล่นเมื่อเปลี่ยนเมนู (/admin/requests) ไม่เล่นทุกครั้งที่เลือกรายการในหน้าเดิม (/admin/requests/12)
+    const section = pathname.split('/').slice(0, 3).join('/')
     const menu = MENUS[user.role]
     const wide = useWide(user.role === 'executive' ? 1024 : 768)
 
@@ -129,7 +139,7 @@ export default function Layout({ children }) {
                 ) : (
                     <MobileTop user={user} onLogout={onLogout} />
                 )}
-                <main className={`flex min-w-0 flex-1 flex-col gap-4 ${wide ? '' : 'pt-14 pb-20'}`}>{children}</main>
+                <main key={section} className={`bl-page flex min-w-0 flex-1 flex-col gap-4 ${wide ? '' : 'pt-14 pb-20'}`}>{children}</main>
                 {!wide && <MobileNav menu={menu} isActive={isActive} />}
             </div>
         )
@@ -139,17 +149,12 @@ export default function Layout({ children }) {
     return (
         <div className="flex min-h-dvh gap-5 bg-canvas p-3 md:p-5">
             {wide ? (
-            <aside className="sticky top-5 flex h-[calc(100dvh-40px)] w-16 shrink-0 flex-col items-center gap-3.5 rounded-[22px] bg-white py-[18px]">
-                <div className="mb-2.5"><Logo /></div>
-                {menu.map((m) => {
-                    const Icon = m.icon
-                    const on = isActive(m)
-                    return (
-                        <NavLink key={m.to} to={m.to} title={m.label} aria-label={m.label} className={`grid size-10 place-items-center rounded-xl border ${on ? 'border-ink bg-ink text-white' : 'border-line text-ink hover:bg-soft'}`}>
-                            <Icon size={18} />
-                        </NavLink>
-                    )
-                })}
+            <aside
+                // z-[1100]: อยู่เหนือแผนที่ Leaflet (ชั้นแผนที่ 400–1000) tooltip เมนูจะได้ไม่จมใต้แผนที่ แต่ยังต่ำกว่า Drawer/Modal (1200)
+                className={`sticky top-5 z-[1100] flex h-[calc(100dvh-40px)] w-16 shrink-0 flex-col items-center gap-3.5 rounded-[22px] bg-white py-[18px] ${user.role === 'admin' ? 'shadow-card' : ''}`}>
+                <div title="Branch Logistics"><Logo /></div>
+                <span aria-hidden className="mb-1 h-px w-8 bg-line" />
+                {menu.map((m) => <IconNav key={m.to} m={m} on={isActive(m)} />)}
                 <div className="mt-auto flex flex-col items-center gap-3.5">
                     <NotificationBell />
                     <button onClick={onLogout} title={`${user.name} · ออกจากระบบ`} className="group relative">
@@ -161,9 +166,31 @@ export default function Layout({ children }) {
             ) : (
                 <MobileTop user={user} onLogout={onLogout} />
             )}
-            <main className={`flex min-w-0 flex-1 flex-col gap-4 ${wide ? '' : 'pt-14 pb-24'}`}>{children}</main>
+            <main key={section} className={`bl-page flex min-w-0 flex-1 flex-col gap-4 ${user.role === 'admin' ? 'bl-admin' : ''} ${wide ? '' : 'pt-14 pb-24'}`}>{children}</main>
             {!wide && <MobileNav menu={menu} isActive={isActive} />}
         </div>
+    )
+}
+
+// ปุ่มเมนูไอคอน (สาขา / คลัง): ชี้แล้วขึ้นชื่อเมนู, เมนูที่เลือกมีแถบเขียวด้านซ้าย
+const IconNav = ({ m, on }) => {
+    const Icon = m.icon
+    return (
+        <NavLink
+            to={m.to}
+            aria-label={m.label}
+            aria-current={on ? 'page' : undefined}
+            className={`group relative grid size-10 place-items-center rounded-xl border transition duration-200 ${on ? 'border-ink bg-ink text-white shadow-[0_4px_12px_rgba(20,22,20,0.18)]' : 'border-line text-ink hover:-translate-y-0.5 hover:bg-soft'}`}
+        >
+            <span aria-hidden className={`absolute -left-[13px] h-5 w-1 rounded-r-full bg-brand transition-all duration-300 ${on ? 'opacity-100' : 'h-0 opacity-0'}`} />
+            <Icon size={18} className="transition-transform duration-200 group-hover:scale-110" />
+            <span
+                role="tooltip"
+                className="pointer-events-none absolute left-[calc(100%+12px)] z-[700] -translate-x-1 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+            >
+                {m.label}
+            </span>
+        </NavLink>
     )
 }
 

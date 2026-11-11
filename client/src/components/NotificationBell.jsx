@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Bell, Boxes, Check, Clock, FileText, Truck, X } from 'lucide-react'
 import api from '../api/client'
@@ -40,7 +40,16 @@ export default function NotificationBell({ variant = 'rail' }) {
     const [open, setOpen] = useState(false)
     const [tab, setTab] = useState('all')
     const [toast, setToast] = useState(null)
+    const [ring, setRing] = useState(0) // เพิ่มค่า = เล่น animation กระดิ่งใหม่ (ใช้เป็น key)
+    const prevUnread = useRef(0)
     const navigate = useNavigate()
+
+    // กระดิ่งสั่นเมื่อจำนวนที่ยังไม่อ่านเพิ่มขึ้น: มีแจ้งเตือนใหม่เข้ามา หรือเปิดหน้าแล้วมีเรื่องค้างอ่าน
+    // สั่นครั้งเดียวต่อเหตุการณ์ ไม่วนไม่หยุด
+    useEffect(() => {
+        if (data.unread > prevUnread.current) setRing((r) => r + 1)
+        prevUnread.current = data.unread
+    }, [data.unread])
 
     const load = useCallback(() => api.get('/notifications').then((r) => setData(r.data)).catch(() => {}), [])
     useEffect(() => {
@@ -81,8 +90,35 @@ export default function NotificationBell({ variant = 'rail' }) {
         await api.post('/notifications/read-all').catch(() => {})
         load()
     }
-    const go = (link) => {
+
+    // เปิดดูแล้วถือว่าอ่านแล้ว: ตัวเลขแดงหายทันที แต่จุดแดงหน้ารายการใหม่ยังแสดงจนกว่าจะปิด
+    // จะได้ยังรู้ว่าอันไหนเพิ่งเข้ามา
+    const [fresh, setFresh] = useState(() => new Set())
+    const openDrawer = () => {
+        setOpen(true)
+        setFresh(new Set(data.items.filter((n) => !n.readAt).map((n) => n.id)))
+        if (data.unread > 0) {
+            prevUnread.current = 0 // ไม่ให้นับว่าเป็นแจ้งเตือนใหม่ตอนเลขกลับไปเป็น 0
+            setData((d) => ({ ...d, unread: 0 }))
+            readAll()
+        }
+    }
+    const closeDrawer = () => {
         setOpen(false)
+        setFresh(new Set())
+    }
+    // กดกล่องที่เด้งขึ้นมา (ไม่ได้เปิดรายการ) → อ่านเฉพาะรายการนั้น
+    const openToast = (n) => {
+        setToast(null)
+        if (n.id) {
+            setData((d) => ({ ...d, unread: Math.max(0, d.unread - 1), items: d.items.map((i) => (i.id === n.id ? { ...i, readAt: new Date().toISOString() } : i)) }))
+            prevUnread.current = Math.max(0, prevUnread.current - 1)
+            api.post(`/notifications/${n.id}/read`).catch(() => {}).finally(load)
+        }
+        if (n.link) navigate(n.link)
+    }
+    const go = (link) => {
+        closeDrawer()
         setToast(null)
         if (link) navigate(link)
     }
@@ -97,23 +133,29 @@ export default function NotificationBell({ variant = 'rail' }) {
     return (
         <>
             <button
-                aria-label="การแจ้งเตือน"
+                aria-label={data.unread ? `การแจ้งเตือน ยังไม่อ่าน ${data.unread} รายการ` : 'การแจ้งเตือน'}
                 title="การแจ้งเตือน"
-                onClick={() => setOpen(true)}
-                className={`relative grid size-10 shrink-0 place-items-center rounded-xl bg-white ${variant === 'rail' ? 'border border-line' : ''}`}
+                onClick={openDrawer}
+                className={`group relative grid size-10 shrink-0 place-items-center rounded-xl bg-white transition duration-200 hover:bg-soft active:scale-95 ${variant === 'rail' ? 'border border-line' : ''}`}
             >
-                <Bell size={18} />
+                {/* วงแหวนกระจายออกหนึ่งครั้งตอนมีแจ้งเตือนใหม่ */}
+                {ring > 0 && <span key={`ping-${ring}`} aria-hidden className="bl-ping pointer-events-none absolute inset-0 rounded-xl border-2 border-danger" />}
+                <span key={`bell-${ring}`} className={`grid origin-[50%_8%] place-items-center ${ring > 0 ? 'bl-ring' : ''} group-hover:[animation:bl-ring_0.8s_ease-in-out]`}>
+                    <Bell size={18} />
+                </span>
                 {data.unread > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-semibold text-white">{data.unread > 99 ? '99+' : data.unread}</span>
+                    <span key={`badge-${ring}`} className={`${ring > 0 ? 'bl-badge-pop' : ''} absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-semibold text-white`}>
+                        {data.unread > 99 ? '99+' : data.unread}
+                    </span>
                 )}
             </button>
 
-            <Drawer open={open} onClose={() => setOpen(false)}>
+            <Drawer open={open} onClose={closeDrawer}>
                 <div className="flex items-center justify-between">
                     <h2 className="text-[26px] font-semibold">การแจ้งเตือน</h2>
                     <div className="flex items-center gap-2">
                         {data.unread > 0 && <button onClick={readAll} className="px-2 text-[13px] font-semibold">อ่านทั้งหมด</button>}
-                        <button aria-label="ปิด" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-xl border border-line"><X size={18} /></button>
+                        <button aria-label="ปิด" onClick={closeDrawer} className="grid size-9 place-items-center rounded-xl border border-line"><X size={18} /></button>
                     </div>
                 </div>
                 <div className="flex gap-2 overflow-x-auto">
@@ -138,7 +180,7 @@ export default function NotificationBell({ variant = 'rail' }) {
                                             <span className="block text-sm font-semibold">{title}</span>
                                             <span className="block text-xs text-muted">{[...rest, time(n.createdAt)].join(' · ')}</span>
                                         </span>
-                                        {!n.readAt && <span className="mt-1.5 size-2.5 shrink-0 rounded-full bg-danger" />}
+                                        {(!n.readAt || fresh.has(n.id)) && <span aria-label="ใหม่" className="mt-1.5 size-2.5 shrink-0 rounded-full bg-danger" />}
                                     </button>
                                 )
                             })}
@@ -148,7 +190,7 @@ export default function NotificationBell({ variant = 'rail' }) {
             </Drawer>
 
             {toast && (
-                <button onClick={() => go(toast.link)} className="fixed right-4 bottom-24 z-[1100] max-w-sm rounded-2xl bg-ink px-4 py-3 text-left text-sm text-white shadow-xl md:bottom-6">
+                <button key={toast.id ?? toast.message} role="status" onClick={() => openToast(toast)} className="bl-toast fixed right-4 bottom-24 z-[1150] max-w-sm rounded-2xl bg-ink px-4 py-3 text-left text-sm text-white shadow-xl md:bottom-6">
                     {toast.message}
                 </button>
             )}

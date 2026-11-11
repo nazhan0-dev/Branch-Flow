@@ -57,12 +57,13 @@ export default function LineChart({ rows, series, tooltip, todayLabel, ticks = 3
                         <text x={P.l - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="#9aa097">{compact(v)}</text>
                     </g>
                 ))}
+                {/* key ผูกกับจำนวนวัน: เปลี่ยนช่วง (7 → 30 วัน) แล้ววาดเส้นใหม่ */}
                 {series.filter((s) => s.area).map((s) => (
-                    <path key={`a-${s.key}`} d={`${path(s.key)} L${x(last)},${y(0)} L${x(0)},${y(0)} Z`} fill={s.color} opacity="0.07" />
+                    <path key={`a-${s.key}-${rows.length}`} className="bl-fade-slow" d={`${path(s.key)} L${x(last)},${y(0)} L${x(0)},${y(0)} Z`} fill={s.color} opacity="0.07" />
                 ))}
                 {/* วาดชุดหลักทีหลังสุดให้อยู่บน */}
                 {[...series].reverse().map((s) => (
-                    <path key={s.key} d={path(s.key)} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                    <path key={`${s.key}-${rows.length}`} className="bl-draw" pathLength="1" d={path(s.key)} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
                 ))}
                 {rows.map((r, i) => (i % every === 0 || i === last) && (
                     <text key={r.day} x={x(i)} y={H - 6} textAnchor="middle" fontSize="11" fill={hover === i ? '#141614' : '#9aa097'}>{label(r.day, i)}</text>

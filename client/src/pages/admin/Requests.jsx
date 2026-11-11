@@ -4,7 +4,7 @@ import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { REQUEST_STATUS, SOURCE, countdown, date, isToday, minutesUntil, time, weight , num } from '../../lib/format'
-import { Badge, Button, Card, Empty, ErrorBox, Loading, Modal, Notice, PageHeader, Segmented, StatusBadge, Stepper, Table, Tabs } from '../../components/ui'
+import { Badge, Button, Card, Empty, ErrorBox, Loading, Modal, Notice, PageHeader, Segmented, Select, StatusBadge, Stepper, Table, Tabs } from '../../components/ui'
 
 const TABS = [
     ['all', 'ทั้งหมด', () => true],
@@ -48,10 +48,7 @@ export default function AdminRequests() {
                 sub={`จากทุกสาขา · วันนี้ ${date(new Date())}`}
                 actions={
                     <>
-                        <select value={region} onChange={(e) => setRegion(e.target.value)} className="h-11 rounded-[14px] bg-white px-3.5 text-sm">
-                            <option value="">ทุกภาค</option>
-                            {regions.map((r) => <option key={r}>{r}</option>)}
-                        </select>
+                        <Select variant="pill" label="ภาค" value={region} onChange={setRegion} options={[['', 'ทุกภาค'], ...regions.map((r) => [r, r])]} align="right" />
                         <Button onClick={() => setCreating(true)}>+ สร้างคำขอให้สาขา</Button>
                     </>
                 }
@@ -262,12 +259,13 @@ function CreateForBranch({ open, onClose, onCreated }) {
     return (
         <Modal open={open} onClose={onClose} title="สร้างคำขอให้สาขา">
             <div className="flex flex-col gap-3">
-                <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="h-11 rounded-xl border border-line bg-white px-3.5 text-sm">
-                    <option value="">เลือกสาขา</option>
-                    {(branches.data || []).filter((b) => !b.isWarehouse).map((b) => (
-                        <option key={b.id} value={b.id}>{b.name} · {b.code}{b.outItems > 0 ? ` (หมด ${b.outItems})` : ''}</option>
-                    ))}
-                </select>
+                <Select
+                    ariaLabel="เลือกสาขา"
+                    placeholder="เลือกสาขา"
+                    value={branchId}
+                    onChange={(v) => setBranchId(String(v))}
+                    options={(branches.data || []).filter((b) => !b.isWarehouse).map((b) => ({ value: b.id, label: `${b.name} · ${b.code}`, hint: b.outItems > 0 ? `หมด ${b.outItems}` : b.lowItems > 0 ? `ใกล้หมด ${b.lowItems}` : null }))}
+                />
                 <div className="max-h-[45vh] overflow-y-auto rounded-2xl border border-line px-3.5">
                     {(products.data || []).map((p) => (
                         <div key={p.id} className="flex items-center justify-between gap-2 border-b border-[#f0f2ef] py-2.5 last:border-0">
