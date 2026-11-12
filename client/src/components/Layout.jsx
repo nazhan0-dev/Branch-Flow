@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, ClipboardList, FileText, Home, Layers, LayoutPanelLeft, LogOut, Map, Package, Store, Truck, User, Clock } from 'lucide-react'
+import { BarChart3, ClipboardList, FileText, Home, Layers, LayoutPanelLeft, LogOut, Map, Monitor, Package, Store, Truck, User, Clock } from 'lucide-react'
 import { useAuth } from '../store/auth'
 import { disconnectSocket } from '../lib/socket'
 import NotificationBell from './NotificationBell'
@@ -11,22 +11,22 @@ import { LogoMark, Wordmark } from './Logo'
 const MENUS = {
     branch: [
         { to: '/branch', label: 'หน้าหลัก', icon: Home, end: true },
-        { to: '/branch/stock', label: 'สต็อก / สั่งของ', icon: Layers, match: ['/branch/order'] },
-        { to: '/branch/requests', label: 'ประวัติคำขอ', icon: FileText, match: ['/branch/receive'] },
+        { to: '/branch/stock', label: 'สต็อก / สั่งของ', short: 'สต็อก', icon: Layers, match: ['/branch/order'] },
+        { to: '/branch/requests', label: 'ประวัติคำขอ', short: 'คำขอ', icon: FileText, match: ['/branch/receive'] },
         { to: '/branch/track', label: 'ติดตามรถ', icon: Map },
     ],
     admin: [
-        { to: '/admin/trips', label: 'แผนที่ติดตามรถ', icon: Map },
-        { to: '/admin/requests', label: 'คำขอเติมสินค้า', icon: LayoutPanelLeft },
-        { to: '/admin/planner', label: 'จัดเที่ยวส่ง', icon: Truck },
-        { to: '/admin/warehouse', label: 'สต็อกคลังกลาง', icon: Package },
+        { to: '/admin/trips', label: 'แผนที่ติดตามรถ', short: 'แผนที่', icon: Map },
+        { to: '/admin/requests', label: 'คำขอเติมสินค้า', short: 'คำขอ', icon: LayoutPanelLeft },
+        { to: '/admin/planner', label: 'จัดเที่ยวส่ง', short: 'จัดเที่ยว', icon: Truck },
+        { to: '/admin/warehouse', label: 'สต็อกคลังกลาง', short: 'คลัง', icon: Package },
         { to: '/admin/branches', label: 'สาขา', icon: Store },
         { to: '/admin/overview', label: 'ภาพรวม', icon: BarChart3 },
     ],
     executive: [
         { to: '/exec', label: 'ภาพรวม', end: true },
         { to: '/exec/branches', label: 'สาขา', icon: Store },
-        { to: '/exec/trips', label: 'แผนที่ติดตามรถ' },
+        { to: '/exec/trips', label: 'แผนที่ติดตามรถ', short: 'แผนที่', mIcon: Map },
     ],
     driver: [
         { to: '/driver', label: 'งาน', icon: ClipboardList, end: true },
@@ -143,6 +143,10 @@ export default function Layout({ children }) {
         )
     }
 
+    // คลัง (Admin): รองรับเฉพาะแท็บเล็ตขึ้นไป (กว้าง ≥ 768px)
+    // งานจัดเที่ยวต้องเห็นรายการคำขอ แผนที่ และลำดับจุดส่งพร้อมกัน จอมือถือเล็กเกินไป
+    if (user.role === 'admin' && !wide) return <UseLargerScreen user={user} onLogout={onLogout} />
+
     // สาขา / คลัง: แถบไอคอนด้านซ้าย
     return (
         <div className="flex min-h-dvh gap-5 bg-canvas p-3 md:p-5">
@@ -169,6 +173,25 @@ export default function Layout({ children }) {
         </div>
     )
 }
+
+// จอเล็กกว่าแท็บเล็ต: แจ้งให้เปิดบนจอใหญ่ (ยังออกจากระบบได้ เผื่อเข้าผิดบัญชี)
+const UseLargerScreen = ({ user, onLogout }) => (
+    <div className="grid min-h-dvh place-items-center bg-canvas p-5">
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-[28px] bg-white p-7 text-center">
+            <LogoMark size={52} />
+            <Monitor size={40} strokeWidth={1.6} className="text-muted" />
+            <div>
+                <h1 className="text-xl font-semibold text-balance">หน้านี้ไม่รองรับหน้าจอขนาดเล็ก</h1>
+                <p className="mt-2 text-sm text-balance text-muted">กรุณาเปิดบนแท็บเล็ต โน้ตบุ๊ก หรือคอมพิวเตอร์ เพื่อให้เห็นรายการคำขอ แผนที่ และ<span className="whitespace-nowrap">ลำดับจุดส่งได้พร้อมกัน</span></p>
+            </div>
+            <div className="w-full rounded-2xl bg-soft px-4 py-3 text-left text-sm">
+                <div className="text-xs text-muted">เข้าสู่ระบบในชื่อ</div>
+                <div className="font-semibold">{user.name}</div>
+            </div>
+            <button onClick={onLogout} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line text-sm font-semibold"><LogOut size={16} /> ออกจากระบบ</button>
+        </div>
+    </div>
+)
 
 // ปุ่มเมนูไอคอน (สาขา / คลัง): ชี้แล้วขึ้นชื่อเมนู, เมนูที่เลือกมีแถบเขียวด้านซ้าย
 const IconNav = ({ m, on }) => {
@@ -207,14 +230,15 @@ const MobileTop = ({ user, onLogout, className = '' }) => (
 )
 
 const MobileNav = ({ menu, isActive, className = '' }) => (
-    <nav className={`fixed inset-x-0 bottom-0 z-[600] flex justify-around border-t border-[#eef0ed] bg-white py-2 ${className}`}>
+    <nav className={`fixed inset-x-0 bottom-0 z-[600] flex justify-around border-t border-[#eef0ed] bg-white px-1 pt-2 pb-[max(8px,env(safe-area-inset-bottom))] ${className}`}>
         {menu.map((m) => {
-            const Icon = m.icon || BarChart3
+            const Icon = m.mIcon || m.icon || BarChart3
             const on = isActive(m)
+            // มือถือใช้ชื่อสั้น (short) ให้อยู่บรรทัดเดียว · ชื่อเต็มไว้ใน aria-label
             return (
-                <NavLink key={m.to} to={m.to} className={`flex flex-col items-center gap-0.5 px-2 text-[11px] ${on ? 'font-semibold text-ink' : 'text-faint'}`}>
-                    <Icon size={20} />
-                    {m.label.split(' ')[0]}
+                <NavLink key={m.to} to={m.to} aria-label={m.label} className={`flex min-w-0 flex-1 flex-col items-center gap-1 text-[11px] whitespace-nowrap ${on ? 'font-semibold text-ink' : 'text-faint'}`}>
+                    <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'bg-brand-soft text-brand-ink' : ''}`}><Icon size={19} /></span>
+                    <span className="max-w-full truncate">{m.short || m.label}</span>
                 </NavLink>
             )
         })}
