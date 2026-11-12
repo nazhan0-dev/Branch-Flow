@@ -4,7 +4,7 @@ import api, { errMsg } from '../../api/client'
 import { useAuth } from '../../store/auth'
 import { useApi } from '../../lib/useApi'
 import { num, weight as fmtWeight } from '../../lib/format'
-import { Badge, Button, Card, ErrorBox, Loading, PageHeader, Product, SearchInput, Segmented, Stepper, Table } from '../../components/ui'
+import { Badge, Button, Card, ErrorBox, Loading, PageHeader, Product, SearchInput, Segmented, Select, Stepper, Table } from '../../components/ui'
 
 // แนะนำ = สูงสุด − คงเหลือ − ของที่กำลังมา (เฉพาะสินค้าที่ต่ำกว่าจุดสั่งซื้อ)
 const suggestOf = (s) => (s.status === 'ok' ? 0 : Math.max(s.maxQty - s.qty - s.incoming, 0))
@@ -82,10 +82,7 @@ export default function NewRequest() {
                     <div className="mb-2 flex flex-wrap gap-2.5">
                         <SearchInput value={q} onChange={setQ} placeholder="ค้นหาสินค้า ชื่อ หรือรหัส" className="min-w-[200px] flex-1" />
                         <Button variant={lowOnly ? 'primary' : 'ghost'} onClick={() => setLowOnly(!lowOnly)}>ใกล้หมดก่อน</Button>
-                        <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-11 rounded-[14px] border border-line bg-white px-3 text-[13px] font-semibold">
-                            <option value="">ทุกหมวด</option>
-                            {cats.map((c) => <option key={c}>{c}</option>)}
-                        </select>
+                        <Select ariaLabel="หมวดสินค้า" value={cat} onChange={setCat} options={[['', 'ทุกหมวด'], ...cats.map((c) => [c, c])]} align="right" className="!w-auto shrink-0" />
                     </div>
                     <Table head={['สินค้า', 'คงเหลือ', 'จุดสั่ง / สูงสุด', 'แนะนำ', { label: 'จำนวนที่สั่ง', right: true }]} minWidth={600}>
                         {rows.map((s) => (

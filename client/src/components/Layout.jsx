@@ -72,6 +72,8 @@ export default function Layout({ children }) {
     const { pathname } = useLocation()
     // animation เปลี่ยนหน้าเล่นเมื่อเปลี่ยนเมนู (/admin/requests) ไม่เล่นทุกครั้งที่เลือกรายการในหน้าเดิม (/admin/requests/12)
     const section = pathname.split('/').slice(0, 3).join('/')
+    // เงาการ์ด/แผนที่/แถบเมนู (class bl-admin): หน้า Admin และหน้าสาขา
+    const elevated = user.role === 'admin' || user.role === 'branch'
     const menu = MENUS[user.role]
     const wide = useWide(user.role === 'executive' ? 1024 : 768)
 
@@ -151,7 +153,7 @@ export default function Layout({ children }) {
             {wide ? (
             <aside
                 // z-[1100]: อยู่เหนือแผนที่ Leaflet (ชั้นแผนที่ 400–1000) tooltip เมนูจะได้ไม่จมใต้แผนที่ แต่ยังต่ำกว่า Drawer/Modal (1200)
-                className={`sticky top-5 z-[1100] flex h-[calc(100dvh-40px)] w-16 shrink-0 flex-col items-center gap-3.5 rounded-[22px] bg-white py-[18px] ${user.role === 'admin' ? 'shadow-card' : ''}`}>
+                className={`sticky top-5 z-[1100] flex h-[calc(100dvh-40px)] w-16 shrink-0 flex-col items-center gap-3.5 rounded-[22px] bg-white py-[18px] ${elevated ? 'shadow-card' : ''}`}>
                 <div title="Branch Logistics"><Logo /></div>
                 <span aria-hidden className="mb-1 h-px w-8 bg-line" />
                 {menu.map((m) => <IconNav key={m.to} m={m} on={isActive(m)} />)}
@@ -166,7 +168,7 @@ export default function Layout({ children }) {
             ) : (
                 <MobileTop user={user} onLogout={onLogout} />
             )}
-            <main key={section} className={`bl-page flex min-w-0 flex-1 flex-col gap-4 ${user.role === 'admin' ? 'bl-admin' : ''} ${wide ? '' : 'pt-14 pb-24'}`}>{children}</main>
+            <main key={section} className={`bl-page flex min-w-0 flex-1 flex-col gap-4 ${elevated ? 'bl-admin' : ''} ${wide ? '' : 'pt-14 pb-24'}`}>{children}</main>
             {!wide && <MobileNav menu={menu} isActive={isActive} />}
         </div>
     )

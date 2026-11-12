@@ -163,7 +163,8 @@ export default function BranchDashboard({ branchId: viewBranchId, viewer }) {
                 </Card>
 
                 <div className="flex min-w-0 flex-col gap-4">
-                    <TripMap trip={trip} branches={trip || !me ? [] : [me]} className="h-[190px]" zoomControl={false}>
+                    {/* แผนที่ยืดเต็มพื้นที่ที่เหลือของคอลัมน์ (สูงเท่าตารางสต็อก) การ์ดคำขอล่าสุดสูงเท่าที่จำเป็น */}
+                    <TripMap trip={trip} branches={trip || !me ? [] : [me]} className="min-h-[280px] flex-1" zoomControl={false}>
                         <button
                             onClick={() => navigate(viewer ? (trip ? `${base}/trips/${trip.id}` : `${base}/trips`) : trip ? `/branch/track/${trip.id}` : '/branch/track')}
                             className="absolute bottom-3.5 left-3.5 z-[500] rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white"
@@ -176,23 +177,23 @@ export default function BranchDashboard({ branchId: viewBranchId, viewer }) {
                         <Button variant="brand" size="lg" onClick={() => navigate(`/branch/receive/${incoming.requestId}`)}>รถถึงแล้ว · นับและรับของ</Button>
                     )}
 
-                    <Card className="flex-1">
-                        <div className="mb-1 flex items-center justify-between">
-                            <div className="text-lg font-semibold">คำขอล่าสุด</div>
+                    <Card className="!py-3.5">
+                        <div className="flex items-center justify-between">
+                            <div className="font-semibold">คำขอล่าสุด</div>
                             {!viewer && <Link to="/branch/requests" className="text-xs text-muted underline">ดูทั้งหมด</Link>}
                         </div>
                         {recent.length === 0 && <Empty>ยังไม่มีคำขอ</Empty>}
                         {recent.map((r) => {
                             const body = (
                                 <>
-                                    <div>
-                                        <div className="font-semibold">{r.code}</div>
-                                        <div className="text-xs text-muted">{r.itemCount} รายการ · {SOURCE[r.source]}</div>
+                                    <div className="min-w-0 text-sm">
+                                        <span className="font-semibold">{r.code}</span>
+                                        <span className="ml-2 text-xs text-muted">{r.itemCount} รายการ · {SOURCE[r.source]}</span>
                                     </div>
                                     {r.status === 'received' && r.shortItems > 0 ? <Badge>รับแล้ว · ขาด {r.shortItems}</Badge> : <Badge tone={REQUEST_STATUS[r.status][1]}>{REQUEST_STATUS[r.status][0]}</Badge>}
                                 </>
                             )
-                            const cls = 'flex items-center justify-between gap-3 border-b border-[#f0f2ef] py-3 last:border-0'
+                            const cls = 'flex items-center justify-between gap-3 border-b border-[#f0f2ef] py-2 last:border-0 last:pb-0'
                             // ผู้บริหารไม่มีหน้าคำขอ → แสดงอย่างเดียว ไม่เป็นลิงก์
                             if (viewer === 'executive') return <div key={r.id} className={cls}>{body}</div>
                             return <Link key={r.id} to={viewer ? `/admin/requests/${r.id}` : `/branch/requests?id=${r.id}`} className={cls}>{body}</Link>

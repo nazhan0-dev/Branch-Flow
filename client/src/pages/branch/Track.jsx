@@ -76,7 +76,7 @@ export default function Track() {
                 <button aria-label="ย้อนกลับ" onClick={() => navigate('/branch')} className="absolute top-4 left-4 z-[500] grid size-11 place-items-center rounded-[14px] bg-white shadow-sm"><ChevronLeft size={20} /></button>
             </TripMap>
 
-            <div className="relative z-[510] -mt-6 flex flex-col gap-4 rounded-t-[28px] bg-white p-5 pb-24 lg:mt-0 lg:h-fit lg:rounded-[22px] lg:pb-5">
+            <div className="bl-card relative z-[510] -mt-6 flex flex-col gap-4 rounded-t-[28px] bg-white p-5 pb-24 lg:mt-0 lg:h-fit lg:rounded-[22px] lg:pb-5">
                 <div className="mx-auto h-1.5 w-11 rounded-full bg-[#e3e6e1] lg:hidden" />
                 <div>
                     <div className="text-xs text-muted">รถกำลังมาที่สาขา{user.name.split(' ').at(-1).replace(/^สาขา/, '')}</div>

@@ -6,7 +6,7 @@ import { useAuth } from '../../store/auth'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { num } from '../../lib/format'
-import { Badge, Button, Card, ErrorBox, Loading, Notice, PageHeader, Product, Segmented, Stepper, Table, Tabs } from '../../components/ui'
+import { Badge, Bar, Button, Card, ErrorBox, Loading, Notice, PageHeader, Product, Segmented, Select, Stepper, Table, Tabs } from '../../components/ui'
 
 const REASONS = [
     ['expired', 'หมดอายุ'],
@@ -64,19 +64,27 @@ export default function BranchStock() {
                 actions={<Tabs items={[['count', 'นับสต็อก'], ['waste', 'บันทึกของเสีย']]} value={tab} onChange={(k) => setParams(k === 'waste' ? { tab: 'waste' } : {})} />}
             />
 
-            <Notice>
-                <div className="flex flex-wrap justify-between gap-2">
-                    <span>
-                        <b className="text-ink">นับแล้ว {done} จาก {data.length} รายการ · พบส่วนต่าง {diffs.length} รายการ</b>{' '}
-                        <span className="text-muted">ระบบจะบันทึกเป็นการปรับยอด (adjust)</span>
-                    </span>
-                    {done > 0 && <button onClick={() => setCounted({})} className="font-semibold text-ink">ล้างการนับ</button>}
-                </div>
-            </Notice>
             {msg && <Notice tone="brand">{msg}</Notice>}
 
-            <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+            {/* items-start: การ์ดแต่ละใบสูงเท่าเนื้อหา ไม่ยืดตามกัน */}
+            <div className="grid items-start gap-4 xl:grid-cols-[1fr_380px]">
                 <Card className={`min-w-0 ${tab === 'waste' ? 'hidden xl:block' : ''}`}>
+                    <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <div className="text-lg font-semibold">นับสต็อก</div>
+                            <div className="text-xs text-muted">ใส่จำนวนที่นับได้จริงบนชั้น ระบบจะปรับยอดในระบบให้ตรง</div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-[150px]">
+                                <div className="mb-1 flex justify-between text-xs text-muted">
+                                    <span>นับแล้ว</span>
+                                    <b className="text-ink tabular-nums">{done}/{data.length}</b>
+                                </div>
+                                <Bar pct={(100 * done) / (data.length || 1)} tone={done === data.length ? 'brand' : 'dark'} className="w-full" />
+                            </div>
+                            {diffs.length > 0 && <Badge tone="warn">ส่วนต่าง {diffs.length}</Badge>}
+                        </div>
+                    </div>
                     <Table head={['สินค้า', 'ในระบบ', 'นับจริง', { label: 'ส่วนต่าง', right: true }]} minWidth={520}>
                         {data.map((r) => {
                             const c = counted[r.productId]
@@ -94,8 +102,18 @@ export default function BranchStock() {
                         })}
                     </Table>
                     <ErrorBox>{err}</ErrorBox>
-                    <div className="mt-4 flex justify-end">
-                        <Button size="lg" className="w-full sm:w-[220px]" disabled={!done} loading={saving} onClick={saveCount}>บันทึกการนับ</Button>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <span className="text-xs text-muted">
+                            {done > 0 ? (
+                                <>
+                                    ส่วนต่างจะบันทึกเป็นการปรับยอด ·{' '}
+                                    <button onClick={() => setCounted({})} className="font-semibold text-ink underline-offset-2 hover:underline">ล้างการนับ</button>
+                                </>
+                            ) : (
+                                'กด + / − หรือพิมพ์จำนวนที่นับได้ แล้วกดบันทึก'
+                            )}
+                        </span>
+                        <Button disabled={!done} loading={saving} onClick={saveCount}>บันทึกการนับ{done > 0 ? ` (${done})` : ''}</Button>
                     </div>
                 </Card>
 
@@ -104,6 +122,14 @@ export default function BranchStock() {
         </>
     )
 }
+
+// ช่องกรอกพร้อมป้ายชื่อด้านบน
+const Field = ({ label, className = '', children }) => (
+    <div className={className}>
+        <div className="mb-1.5 text-xs text-muted">{label}</div>
+        {children}
+    </div>
+)
 
 function WasteForm({ stock, branchId, onSaved, className }) {
     const [pid, setPid] = useState('')
@@ -138,36 +164,51 @@ function WasteForm({ stock, branchId, onSaved, className }) {
     }
 
     return (
-        <Card className={`h-fit flex-col gap-3 ${className}`}>
-            <div className="text-lg font-semibold">บันทึกของเสีย</div>
-            <label className="text-xs text-muted">สินค้า</label>
-            <select value={pid} onChange={(e) => setPid(e.target.value)} className="h-11 rounded-xl border border-line bg-white px-3.5 text-sm">
-                <option value="">เลือกสินค้า</option>
-                {stock.map((s) => (
-                    <option key={s.productId} value={s.productId}>{s.name} · {s.sku} (เหลือ {s.qty})</option>
-                ))}
-            </select>
-            <label className="text-xs text-muted">จำนวน</label>
-            <Stepper value={qty} min={1} onChange={setQty} />
-            <label className="text-xs text-muted">เหตุผล</label>
-            <Segmented items={REASONS} value={reason} onChange={setReason} />
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)" maxLength={200} className="h-11 rounded-xl border border-line px-3.5 text-sm outline-none focus:border-ink" />
+        // xl:sticky: เลื่อนหน้าแล้วฟอร์มลอยตาม
+        <Card className={`h-fit flex-col gap-3.5 xl:sticky xl:top-5 ${className}`}>
+            <div>
+                <div className="text-lg font-semibold">บันทึกของเสีย</div>
+                <div className="text-xs text-muted">ตัดของหมดอายุหรือเสียหายออกจากสต็อก</div>
+            </div>
+
+            <Field label="สินค้า">
+                <Select
+                    ariaLabel="เลือกสินค้า"
+                    placeholder="เลือกสินค้า"
+                    value={pid}
+                    onChange={(v) => setPid(String(v))}
+                    options={stock.map((s) => ({ value: s.productId, label: `${s.name} · ${s.sku}`, hint: `เหลือ ${num(s.qty)}` }))}
+                />
+                {product && (
+                    <div className="mt-1.5 text-xs text-muted">
+                        คงเหลือ <b className="text-ink">{num(product.qty)}</b> → <b className={product.qty - qty < 0 ? 'text-danger-ink' : 'text-ink'}>{num(product.qty - qty)}</b> {product.unit} หลังบันทึก
+                    </div>
+                )}
+            </Field>
+
+            <Field label="จำนวน"><Stepper value={qty} min={1} onChange={setQty} /></Field>
+            <Field label="เหตุผล"><Segmented full items={REASONS} value={reason} onChange={setReason} /></Field>
+
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)" maxLength={200} className="h-11 rounded-xl border border-line px-3.5 text-sm outline-none transition-shadow focus:border-ink/30 focus:shadow-[0_0_0_4px_rgba(20,22,20,0.06)]" />
             <input ref={file} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => e.target.files[0] && setPhoto({ name: e.target.files[0].name, url: URL.createObjectURL(e.target.files[0]) })} />
             {photo ? (
                 <div className="relative overflow-hidden rounded-2xl border border-line">
-                    <img src={photo.url} alt="รูปหลักฐาน" className="h-[130px] w-full object-cover" />
+                    <img src={photo.url} alt="รูปหลักฐาน" className="h-[120px] w-full object-cover" />
                     <button aria-label="ลบรูป" onClick={() => setPhoto(null)} className="absolute top-2 right-2 grid size-8 place-items-center rounded-lg bg-white"><X size={16} /></button>
                 </div>
             ) : (
-                <button type="button" onClick={() => file.current.click()} className="flex h-[110px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[#cfd3cd] text-xs text-muted">
-                    <Camera size={22} />
-                    ถ่ายรูปหรือแนบรูปหลักฐาน
+                <button type="button" onClick={() => file.current.click()} className="flex h-[60px] items-center justify-center gap-2.5 rounded-2xl border border-dashed border-[#cfd3cd] text-xs text-muted transition-colors hover:border-ink/30 hover:bg-soft">
+                    <Camera size={18} />
+                    ถ่ายรูปหรือแนบรูปหลักฐาน (ถ้ามี)
                 </button>
             )}
-            <p className="text-xs text-muted">ของเสียจะตัดออกจากสต็อก และนับในส่วน "ยอดขายและของเสีย" บนหน้าหลักของสาขา (เดโมนี้เก็บแค่ชื่อไฟล์รูปไว้ในหมายเหตุ)</p>
+
             <ErrorBox>{err}</ErrorBox>
             {msg && <Notice tone="brand">{msg}</Notice>}
-            <Button variant="ghost" size="lg" disabled={!product} loading={busy} onClick={save}>บันทึกของเสีย</Button>
+            <Button disabled={!product} loading={busy} onClick={save}>
+                {product ? `ตัด ${product.name} ออก ${num(qty)} ${product.unit}` : 'เลือกสินค้าก่อนบันทึก'}
+            </Button>
+            <p className="text-center text-[11px] text-faint">แสดงในส่วน "ยอดขายและของเสีย" บนหน้าหลักของสาขา</p>
         </Card>
     )
 }

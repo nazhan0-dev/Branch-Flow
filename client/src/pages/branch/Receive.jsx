@@ -73,7 +73,7 @@ export default function Receive() {
 
             {!ready && <ErrorBox>{r.stop ? 'รถยังไม่ถึงสาขา รอคนขับกด "ถึงสาขาแล้ว" ก่อนจึงจะนับของได้' : 'คำขอนี้ยังไม่ได้อยู่ในเที่ยวส่ง'}</ErrorBox>}
 
-            <div className="rounded-[18px] bg-white p-4">
+            <div className="bl-card rounded-[18px] bg-white p-4">
                 <div className="mb-2.5 flex items-center justify-between">
                     <b className="text-sm">นับแล้ว {counted.length} จาก {items.length} รายการ</b>
                     {short.length > 0 && <Badge tone="danger">ขาด {short.length} รายการ</Badge>}
@@ -90,7 +90,7 @@ export default function Receive() {
                 นับครบตามที่ส่งมาทุกรายการ
             </button>
 
-            <div className="rounded-[22px] bg-white px-4">
+            <div className="bl-card rounded-[22px] bg-white px-4">
                 {items.map((i) => {
                     const g = good[i.productId]
                     const d = bad[i.productId] || 0
@@ -127,7 +127,7 @@ export default function Receive() {
             </div>
 
             <ErrorBox>{err}</ErrorBox>
-            <div className="sticky bottom-20 rounded-[22px] bg-white p-4 text-center md:bottom-4">
+            <div className="bl-card sticky bottom-20 rounded-[22px] bg-white p-4 text-center md:bottom-4">
                 <p className="mb-3 text-xs text-muted">ยืนยันแล้วสต็อกสาขาจะเพิ่มตามจำนวนที่นับ{short.length ? ' · ระบบจะแจ้งคลังเรื่องของขาด' : ''}</p>
                 <Button size="lg" className="w-full" disabled={!ready || counted.length < items.length} loading={busy} onClick={confirm}>
                     {counted.length < items.length ? `นับให้ครบก่อน (${items.length - counted.length})` : 'ยืนยันรับของ'}

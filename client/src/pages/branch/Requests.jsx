@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { REQUEST_STATUS, SOURCE, dateTime, time } from '../../lib/format'
-import { Badge, Button, Card, Empty, ErrorBox, Loading, PageHeader, Table, Tabs, Timeline } from '../../components/ui'
+import { Badge, Button, Card, Empty, ErrorBox, Loading, PageHeader, Select, Table, Tabs, Timeline } from '../../components/ui'
 
 const problem = (r) => r.status === 'rejected' || r.issueCount > 0
 const TABS = [
@@ -13,7 +13,11 @@ const TABS = [
     ['done', 'รับแล้ว', (r) => r.status === 'received' && !problem(r)],
     ['issue', 'มีปัญหา', problem],
 ]
-const RANGES = [30, 90, 0]
+const RANGES = [
+    [30, '30 วันล่าสุด'],
+    [90, '90 วันล่าสุด'],
+    [0, 'ทั้งหมด'],
+]
 
 // ป้ายสถานะในประวัติ: แยก "รับไม่ครบ" ออกจาก "รับแล้ว"
 export const historyPill = (r) => {
@@ -52,7 +56,7 @@ export default function BranchRequests() {
                 sub={`คำขอของสาขา · ${days ? `${days} วันล่าสุด` : 'ทั้งหมด'}`}
                 actions={
                     <>
-                        <Button variant="chip" onClick={() => setDays(RANGES[(RANGES.indexOf(days) + 1) % RANGES.length])}>{days ? `${days} วัน` : 'ทั้งหมด'}</Button>
+                        <Select small ariaLabel="ช่วงเวลา" value={days} onChange={setDays} options={RANGES} align="right" className="!w-auto shrink-0" />
                         <Button onClick={() => navigate('/branch/order')}>+ สั่งสินค้า</Button>
                     </>
                 }

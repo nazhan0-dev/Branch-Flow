@@ -34,8 +34,19 @@ export default function LineChart({ rows, series, tooltip, todayLabel, ticks = 3
     const every = Math.ceil(rows.length / 8)
     const label = (d, i) =>
         todayLabel && i === last ? todayLabel : dayDate(d).toLocaleDateString('th-TH', rows.length <= 7 ? { weekday: 'short', timeZone: 'Asia/Bangkok' } : { day: 'numeric', month: 'short', timeZone: 'Asia/Bangkok' })
-    const h = hover != null ? rows[hover] : null
+    // hover เป็นทศนิยม: จุดเลื่อนไปตามเส้นระหว่างวัน ค่าที่โชว์คิดตามสัดส่วนระหว่างสองวัน
+    const near = hover != null ? Math.round(hover) : null
+    const h = (() => {
+        if (hover == null) return null
+        const a = Math.floor(hover)
+        const b = Math.min(a + 1, last)
+        const t = hover - a
+        const row = { ...rows[near] }
+        for (const s of series) row[s.key] = Math.round((Number(rows[a][s.key]) || 0) * (1 - t) + (Number(rows[b][s.key]) || 0) * t)
+        return row
+    })()
     const main = series[0]
+    const hx = hover != null ? P.l + (hover * (W - P.l - P.r)) / Math.max(last, 1) : 0
 
     return (
         <div className="relative">
@@ -48,7 +59,9 @@ export default function LineChart({ rows, series, tooltip, todayLabel, ticks = 3
                 onMouseMove={(e) => {
                     const r = e.currentTarget.getBoundingClientRect()
                     const px = ((e.clientX - r.left) / r.width) * W
-                    setHover(Math.max(0, Math.min(last, Math.round(((px - P.l) / (W - P.l - P.r)) * last))))
+                    const f = Math.max(0, Math.min(last, ((px - P.l) / (W - P.l - P.r)) * last))
+                    // ใกล้จุดของวันไหน (จุดหักขึ้น/ลง) ให้ดูดติดจุดนั้นไว้ โชว์ยอดจริงของวันนั้น
+                    setHover(Math.abs(f - Math.round(f)) < 0.25 ? Math.round(f) : f)
                 }}
             >
                 {lines.map((v) => (
@@ -66,18 +79,18 @@ export default function LineChart({ rows, series, tooltip, todayLabel, ticks = 3
                     <path key={`${s.key}-${rows.length}`} className="bl-draw" pathLength="1" d={path(s.key)} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
                 ))}
                 {rows.map((r, i) => (i % every === 0 || i === last) && (
-                    <text key={r.day} x={x(i)} y={H - 6} textAnchor="middle" fontSize="11" fill={hover === i ? '#141614' : '#9aa097'}>{label(r.day, i)}</text>
+                    <text key={r.day} x={x(i)} y={H - 6} textAnchor="middle" fontSize="11" fill={near === i ? '#141614' : '#9aa097'}>{label(r.day, i)}</text>
                 ))}
                 {h && (
                     <>
-                        <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} stroke="#9aa097" strokeDasharray="3 3" />
-                        <circle cx={x(hover)} cy={y(h[main.key])} r="6" fill="#fff" stroke={main.color} strokeWidth="3" />
+                        <line x1={hx} x2={hx} y1={P.t} y2={H - P.b} stroke="#9aa097" strokeDasharray="3 3" />
+                        <circle cx={hx} cy={y(h[main.key])} r="6" fill="#fff" stroke={main.color} strokeWidth="3" />
                     </>
                 )}
             </svg>
             {h && (
-                <div className="pointer-events-none absolute top-0 rounded-xl border border-line bg-white px-3 py-1.5 text-xs shadow-sm" style={{ left: `clamp(0px, calc(${(x(hover) / W) * 100}% - 70px), calc(100% - 170px))` }}>
-                    <div className="text-muted">{todayLabel && hover === last ? `${todayLabel} (ถึงตอนนี้)` : longDate(dayDate(h.day))}</div>
+                <div className="pointer-events-none absolute top-0 rounded-xl border border-line bg-white px-3 py-1.5 text-xs shadow-sm" style={{ left: `clamp(0px, calc(${(hx / W) * 100}% - 70px), calc(100% - 170px))` }}>
+                    <div className="text-muted">{todayLabel && near === last ? `${todayLabel} (ถึงตอนนี้)` : longDate(dayDate(h.day))}</div>
                     <b>{tooltip(h)}</b>
                 </div>
             )}

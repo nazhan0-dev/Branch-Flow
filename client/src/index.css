@@ -63,7 +63,7 @@ body { background: var(--color-canvas); color: var(--color-ink); }
 }
 .leaflet-tooltip-top.bl-tip::before { border-top-color: #fff; }
 
-/* เงาการ์ด: ใช้เฉพาะหน้า Admin (main มี class bl-admin ตั้งใน Layout) */
+/* เงาการ์ด: ใช้กับหน้า Admin และหน้าสาขา (main มี class bl-admin ตั้งใน Layout) */
 .bl-admin .bl-card { box-shadow: var(--shadow-card); }
 .bl-admin .bl-card-hover:hover { box-shadow: var(--shadow-card-hover); }
 .bl-admin .bl-map { box-shadow: var(--shadow-map); }
@@ -89,10 +89,6 @@ body { background: var(--color-canvas); color: var(--color-ink); }
     from { opacity: 0; transform: translateX(28px); }
     to { opacity: 1; transform: none; }
 }
-@keyframes bl-grow-x {
-    from { transform: scaleX(0); }
-    to { transform: scaleX(1); }
-}
 @keyframes bl-draw {
     from { stroke-dashoffset: 1; }
     to { stroke-dashoffset: 0; }
@@ -117,7 +113,8 @@ body { background: var(--color-canvas); color: var(--color-ink); }
 .bl-page > *:nth-child(n + 6) { animation-delay: 250ms; }
 
 /* แถบความคืบหน้า: ยืดออกจากซ้ายตอนแสดงครั้งแรก แล้วเปลี่ยนความยาวแบบนุ่ม ๆ */
-.bl-bar { transform-origin: left; animation: bl-grow-x 0.8s var(--ease-out) backwards; transition: width 0.5s var(--ease-out); }
+/* แถบ: เริ่มกว้าง 0 แล้ววิ่งไปค่าจริงตอนเลื่อนมาเห็น (Bar ใน ui.jsx) */
+.bl-bar { transition: width 0.9s var(--ease-out), min-width 0.9s var(--ease-out); }
 
 /* กราฟเส้น: วาดเส้นจากซ้ายไปขวา (path ใช้ pathLength=1) */
 .bl-draw { stroke-dasharray: 1; animation: bl-draw 1.1s var(--ease-out) backwards; }

@@ -243,11 +243,27 @@ export const Product = ({ name, sku }) => (
     </span>
 )
 
+// แถบวิ่งจาก 0 ตอนเลื่อนมาเห็นครั้งแรก (การ์ดที่อยู่ล่างจอจะไม่วิ่งจบไปก่อนผู้ใช้เห็น)
+const useSeen = () => {
+    const ref = useRef(null)
+    const [seen, setSeen] = useState(false)
+    useEffect(() => {
+        const el = ref.current
+        if (!el || seen) return
+        if (typeof IntersectionObserver === 'undefined') return setSeen(true)
+        const io = new IntersectionObserver(([e]) => e.isIntersecting && setSeen(true), { threshold: 0.6 })
+        io.observe(el)
+        return () => io.disconnect()
+    }, [seen])
+    return [ref, seen]
+}
 export const Bar = ({ pct, tone = 'brand', className = 'w-[120px]' }) => {
     const color = { brand: 'bg-brand', warn: 'bg-warn', danger: 'bg-danger', dark: 'bg-ink', gray: 'bg-[#9aa097]' }[tone]
+    const [ref, seen] = useSeen()
+    const w = seen ? Math.max(0, Math.min(pct, 100)) : 0
     return (
-        <div className={`h-2 overflow-hidden rounded bg-[#f1f3f0] ${className}`}>
-            <div className={`bl-bar h-full rounded ${color}`} style={{ width: `${Math.max(0, Math.min(pct, 100))}%`, minWidth: pct > 0 ? 3 : 0 }} />
+        <div ref={ref} className={`h-2 overflow-hidden rounded bg-[#f1f3f0] ${className}`}>
+            <div className={`bl-bar h-full rounded ${color}`} style={{ width: `${w}%`, minWidth: seen && pct > 0 ? 3 : 0 }} />
         </div>
     )
 }
@@ -337,7 +353,8 @@ const SELECT_TRIGGER = {
     pill: 'h-11 rounded-[14px] bg-white px-3.5 text-sm shadow-sm hover:bg-soft',
     ghost: '-ml-1 rounded-lg px-1 text-lg font-semibold hover:bg-soft',
 }
-export const Select = ({ value, onChange, options, placeholder = 'เลือก', label, variant = 'field', align = 'left', className = '', ariaLabel }) => {
+// small: เมนูกว้างเท่าปุ่มและแถวเตี้ยลง — ใช้กับตัวเลือกสั้น ๆ ไม่กี่ตัว
+export const Select = ({ value, onChange, options, placeholder = 'เลือก', label, variant = 'field', align = 'left', className = '', ariaLabel, small }) => {
     const opts = options.map((o) => (Array.isArray(o) ? { value: o[0], label: o[1] } : o))
     const [open, setOpen] = useState(false)
     const [q, setQ] = useState('')
@@ -360,7 +377,7 @@ export const Select = ({ value, onChange, options, placeholder = 'เลือ�
             right: align === 'right' ? window.innerWidth - r.right : undefined,
             top: up ? undefined : r.bottom + 6,
             bottom: up ? window.innerHeight - r.top + 6 : undefined,
-            minWidth: Math.max(r.width, 180),
+            minWidth: small ? r.width : Math.max(r.width, 180),
             maxHeight: Math.min(320, (up ? r.top : below) - 16),
         })
     }
@@ -439,7 +456,7 @@ export const Select = ({ value, onChange, options, placeholder = 'เลือ�
             {open && pos && createPortal(
                 <div
                     ref={menu}
-                    className="bl-pop fixed z-[1300] flex flex-col overflow-hidden rounded-2xl border border-line bg-white p-1.5 shadow-[0_12px_32px_rgba(20,22,20,0.14)]"
+                    className={`bl-pop fixed z-[1300] flex flex-col overflow-hidden border border-line bg-white shadow-[0_12px_32px_rgba(20,22,20,0.14)] ${small ? 'rounded-xl p-1' : 'rounded-2xl p-1.5'}`}
                     style={{ left: pos.left, right: pos.right, top: pos.top, bottom: pos.bottom, minWidth: pos.minWidth, maxWidth: 'calc(100vw - 24px)', maxHeight: pos.maxHeight }}
                 >
                     {searchable && (
@@ -475,12 +492,12 @@ export const Select = ({ value, onChange, options, placeholder = 'เลือ�
                                     onMouseEnter={() => setActive(i)}
                                     onMouseDown={(e) => e.preventDefault()} // ไม่ให้ปุ่มเสียโฟกัสก่อนเลือก
                                     onClick={() => pick(o)}
-                                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm transition-colors duration-100 ${i === active ? 'bg-soft' : ''} ${selected ? 'font-semibold' : ''}`}
+                                    className={`flex cursor-pointer items-center justify-between gap-3 ${small ? 'rounded-lg px-2.5 py-1.5 text-[13px]' : 'rounded-xl px-3 py-2 text-sm'} transition-colors duration-100 ${i === active ? 'bg-soft' : ''} ${selected ? 'font-semibold' : ''}`}
                                 >
                                     <span className="min-w-0 truncate">{o.label}</span>
                                     <span className="flex shrink-0 items-center gap-2">
                                         {o.hint != null && <span className="text-xs font-normal text-muted">{o.hint}</span>}
-                                        <CheckIcon size={16} className={`text-brand ${selected ? '' : 'invisible'}`} />
+                                        <CheckIcon size={small ? 14 : 16} className={`text-brand ${selected ? '' : 'invisible'}`} />
                                     </span>
                                 </div>
                             )
