@@ -64,6 +64,8 @@ body { background: var(--color-canvas); color: var(--color-ink); }
 .leaflet-tooltip-top.bl-tip::before { border-top-color: #fff; }
 
 /* เงาการ์ด: ใช้กับหน้า Admin และหน้าสาขา (main มี class bl-admin ตั้งใน Layout) */
+/* แผนที่ที่มีแผ่นข้อมูลทับด้านล่าง (หน้าคนขับ): ยกมุมล่างของ Leaflet ขึ้นพ้นแผ่นข้อมูล */
+.bl-sheet-map .leaflet-bottom { bottom: calc(var(--sheet, 0px) + 4px); transition: bottom 0.2s; }
 .bl-admin .bl-card { box-shadow: var(--shadow-card); }
 .bl-admin .bl-card-hover:hover { box-shadow: var(--shadow-card-hover); }
 .bl-admin .bl-map { box-shadow: var(--shadow-map); }
@@ -85,6 +87,24 @@ body { background: var(--color-canvas); color: var(--color-ink); }
     from { opacity: 0; transform: translateY(8px) scale(0.98); }
     to { opacity: 1; transform: none; }
 }
+/* การ์ดงานคนขับ: ส่วนต่าง ๆ ลอยขึ้นตามลำดับ (--d) · แถบจุดส่งเติมทีละช่อง · เครื่องหมายถูกเด้งแล้วขีด */
+@keyframes bl-grow-x {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+@keyframes bl-check-pop {
+    0% { transform: scale(0) rotate(-20deg); }
+    60% { transform: scale(1.15) rotate(4deg); }
+    100% { transform: none; }
+}
+@keyframes bl-check-draw {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+}
+.bl-rise { animation: bl-fade-up 0.5s var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
+.bl-seg { transform-origin: left; animation: bl-grow-x 0.6s var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
+.bl-check-pop { animation: bl-check-pop 0.55s var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
+.bl-check-pop path { stroke-dasharray: 24; animation: bl-check-draw 0.4s var(--ease-out) backwards; animation-delay: calc(var(--d, 0ms) + 250ms); }
 @keyframes bl-slide-left {
     from { opacity: 0; transform: translateX(28px); }
     to { opacity: 1; transform: none; }

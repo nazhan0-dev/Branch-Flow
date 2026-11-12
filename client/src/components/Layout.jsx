@@ -5,6 +5,7 @@ import { useAuth } from '../store/auth'
 import { disconnectSocket } from '../lib/socket'
 import NotificationBell from './NotificationBell'
 import { Avatar } from './ui'
+import { LogoMark, Wordmark } from './Logo'
 
 // เมนูตามบทบาท (ลำดับเดียวกับดีไซน์) match = path อื่นที่ให้ไอคอนนี้ active ด้วย
 const MENUS = {
@@ -28,8 +29,9 @@ const MENUS = {
         { to: '/exec/trips', label: 'แผนที่ติดตามรถ' },
     ],
     driver: [
-        { to: '/driver', label: 'งาน', icon: ClipboardList, end: true, match: ['/driver/trips'] },
-        { to: '/driver/map', label: 'แผนที่', icon: Map },
+        { to: '/driver', label: 'งาน', icon: ClipboardList, end: true },
+        // แท็บแผนที่พาไปหน้าเที่ยวส่ง (/driver/trips/:id) ซึ่งเป็นหน้าแผนที่ → ไฮไลต์แท็บนี้
+        { to: '/driver/map', label: 'แผนที่', icon: Map, match: ['/driver/trips'] },
         { to: '/driver/history', label: 'ประวัติ', icon: Clock },
         { to: '/driver/profile', label: 'โปรไฟล์', icon: User },
     ],
@@ -54,16 +56,7 @@ const useActive = () => {
     return (m) => (m.end ? pathname === m.to : pathname.startsWith(m.to)) || (m.match || []).some((p) => pathname.startsWith(p))
 }
 
-const Logo = ({ size = 36 }) => (
-    // โลโก้ใช้สีเขียวของแบรนด์ ไม่ซ้ำกับปุ่มเมนูที่เลือกอยู่ (พื้นดำ)
-    // วาดเป็น SVG: ฟอนต์ไทยเผื่อที่สระบน/ล่างไว้ อักษรอังกฤษจัดกลางด้วย flex/grid จะเยื้องขึ้น
-    // จึงวางเส้นฐานเองที่ กึ่งกลาง + ครึ่งหนึ่งของความสูงตัวพิมพ์ใหญ่ (cap height ≈ 0.7em)
-    <svg aria-hidden width={size} height={size} viewBox="0 0 100 100" className="shrink-0 select-none">
-        <circle cx="50" cy="50" r="50" fill="var(--color-brand)" />
-        {/* x=49: เนื้อตัวอักษร "BL" เยื้องขวาจากจุดกึ่งกลางเล็กน้อย (วัดจากภาพจริง) ขยับชดเชย */}
-        <text x="49" y="50" dy="0.35em" textAnchor="middle" fontSize="40" fontWeight="700" fill="#fff" fontFamily="inherit">BL</text>
-    </svg>
-)
+const Logo = ({ size = 36 }) => <LogoMark size={size} />
 
 export default function Layout({ children }) {
     const { user, logout } = useAuth()
@@ -88,13 +81,16 @@ export default function Layout({ children }) {
         return (
             <div className="mx-auto flex min-h-dvh max-w-[430px] flex-col bg-canvas">
                 <main className="flex-1 pb-[84px]">{children}</main>
-                <nav className="fixed inset-x-0 bottom-0 z-[600] mx-auto flex h-[76px] max-w-[430px] justify-around border-t border-[#eef0ed] bg-white pt-3">
+                {/* เมนูล่าง: เมนูที่เลือกมีพื้นแคปซูลหลังไอคอน · เว้นขอบล่างของมือถือที่มีแถบโฮม */}
+                <nav className="fixed inset-x-0 bottom-0 z-[600] mx-auto flex h-[76px] max-w-[430px] justify-around border-t border-[#eef0ed] bg-white/95 pt-2 pb-[env(safe-area-inset-bottom)] backdrop-blur">
                     {menu.map((m) => {
                         const Icon = m.icon
                         const on = isActive(m)
                         return (
-                            <NavLink key={m.to} to={m.to} className={`flex w-16 flex-col items-center gap-1 text-[11px] ${on ? 'font-semibold text-ink' : 'text-faint'}`}>
-                                <Icon size={22} />
+                            <NavLink key={m.to} to={m.to} className={`flex w-16 flex-col items-center gap-1 text-[11px] transition-colors ${on ? 'font-semibold text-ink' : 'text-faint hover:text-muted'}`}>
+                                <span className={`grid h-8 w-14 place-items-center rounded-full transition-colors duration-200 ${on ? 'bg-brand-soft text-brand-ink' : ''}`}>
+                                    <Icon size={21} />
+                                </span>
                                 {m.label}
                             </NavLink>
                         )
@@ -112,7 +108,7 @@ export default function Layout({ children }) {
                 <aside className="sticky top-5 flex h-[calc(100dvh-40px)] w-[232px] shrink-0 flex-col rounded-[22px] bg-white p-4">
                     <div className="mb-6 flex items-center gap-2.5 px-2 pt-1">
                         <Logo size={30} />
-                        <span className="text-[15px] font-semibold">Branch Logistics</span>
+                        <Wordmark className="text-[15px]" />
                     </div>
                     <nav className="space-y-1">
                         {menu.map((m) => (
@@ -154,7 +150,7 @@ export default function Layout({ children }) {
             <aside
                 // z-[1100]: อยู่เหนือแผนที่ Leaflet (ชั้นแผนที่ 400–1000) tooltip เมนูจะได้ไม่จมใต้แผนที่ แต่ยังต่ำกว่า Drawer/Modal (1200)
                 className={`sticky top-5 z-[1100] flex h-[calc(100dvh-40px)] w-16 shrink-0 flex-col items-center gap-3.5 rounded-[22px] bg-white py-[18px] ${elevated ? 'shadow-card' : ''}`}>
-                <div title="Branch Logistics"><Logo /></div>
+                <div title="BranchFlow"><Logo /></div>
                 <span aria-hidden className="mb-1 h-px w-8 bg-line" />
                 {menu.map((m) => <IconNav key={m.to} m={m} on={isActive(m)} />)}
                 <div className="mt-auto flex flex-col items-center gap-3.5">

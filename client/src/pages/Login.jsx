@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, Package, Store, Truck, Warehouse } from 'lucide-react'
+import { BarChart3, Store, Truck, Warehouse } from 'lucide-react'
 import { errMsg } from '../api/client'
 import { HOME, useAuth } from '../store/auth'
 import { Button, ErrorBox } from '../components/ui'
+import { LogoMark, Wordmark } from '../components/Logo'
 
 // บัญชีทดลอง (seed จาก db/reset.js) กดการ์ดแล้วเติมอีเมล/รหัสให้
 const DEMO = [
@@ -41,9 +42,9 @@ export default function Login() {
             <div className="grid w-full max-w-4xl gap-4 md:grid-cols-[1fr_1.1fr]">
                 <form onSubmit={submit} className="rounded-[28px] bg-white p-7">
                     <div className="mb-8 flex items-center gap-2.5">
-                        <div className="grid size-11 place-items-center rounded-2xl bg-ink text-white"><Package size={20} /></div>
+                        <LogoMark size={44} />
                         <div>
-                            <div className="font-semibold">Branch Logistics</div>
+                            <Wordmark className="text-lg" />
                             <div className="text-xs text-muted">ระบบเติมสินค้าและจัดส่งระหว่างสาขา</div>
                         </div>
                     </div>

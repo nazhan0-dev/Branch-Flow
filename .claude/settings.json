@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node \"C:/Users/User/AppData/Local/Temp/claude/c8ea2b59fdee49eb/a545b14e-b094-4eba-a4dc-0b6c575f1f7d/scratchpad/pp/driverAll.cjs\" after)",
+      "Bash(node \"C:/Users/User/AppData/Local/Temp/claude/c8ea2b59fdee49eb/a545b14e-b094-4eba-a4dc-0b6c575f1f7d/scratchpad/pp/drvMapTab.cjs\")"
+    ]
+  }
+}
