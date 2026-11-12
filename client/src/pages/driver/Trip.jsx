@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronUp, Clock, MapPin, Navigation, Package, Truck } from 'lucide-react'
 import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
+import { useNow } from '../../lib/useNow'
 import { useSocket } from '../../lib/socket'
 import { TRIP_STATUS, countdown, minutesUntil, time } from '../../lib/format'
 import { fmtKm, nearestIndex, roadKm, walkAlong } from '../../lib/geo'
@@ -16,6 +17,7 @@ const GPS_LABEL = { live: 'ส่งตำแหน่งอยู่ (GPS)', si
 
 export default function DriverTrip() {
     const { id } = useParams()
+    useNow() // เวลา/นับถอยหลังบนหน้าเดินเองทุก 30 วินาที
     const navigate = useNavigate()
     const { data: trip, error, loading, reload } = useApi(`/trips/${id}`)
     const [busy, setBusy] = useState('')

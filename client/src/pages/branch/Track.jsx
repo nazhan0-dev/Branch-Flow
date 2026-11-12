@@ -6,11 +6,13 @@ import { useSocket } from '../../lib/socket'
 import { useAuth } from '../../store/auth'
 import { SOURCE, countdown, minutesUntil, time } from '../../lib/format'
 import { fmtKm, roadKm } from '../../lib/geo'
+import { useNow } from '../../lib/useNow'
 import TripMap from '../../components/TripMap'
 import { Avatar, Badge, Button, Empty, ErrorBox, Loading, PageHeader, Timeline } from '../../components/ui'
 
 export default function Track() {
     const { id } = useParams()
+    useNow() // เวลา/นับถอยหลังบนหน้าเดินเองทุก 30 วินาที
     const navigate = useNavigate()
     const user = useAuth((s) => s.user)
     const [trip, setTrip] = useState(null)

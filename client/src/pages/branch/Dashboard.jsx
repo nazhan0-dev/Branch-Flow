@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronLeft } from 'lucide-react'
 import api, { errMsg } from '../../api/client'
 import { useAuth } from '../../store/auth'
 import { useApi } from '../../lib/useApi'
+import { useNow } from '../../lib/useNow'
 import { useSocket } from '../../lib/socket'
 import { REQUEST_STATUS, SOURCE, countdown, minutesUntil, num, time } from '../../lib/format'
 import TripMap from '../../components/TripMap'
@@ -31,8 +32,9 @@ export default function BranchDashboard({ branchId: viewBranchId, viewer }) {
     const navigate = useNavigate()
     const branchId = viewBranchId ?? user.branchId
     const base = viewer === 'executive' ? '/exec' : '/admin'
-    const dash = useApi(`/dashboard/branch/${branchId}`)
+    const dash = useApi(`/dashboard/branch/${branchId}`, [], { poll: 60000 })
     const stock = useApi(`/branches/${branchId}/stock`)
+    useNow() // นับถอยหลัง "อีก X นาที" / "ส่งเข้าคลังเองใน …" เดินเอง
     const branches = useApi('/branches')
     const [trip, setTrip] = useState(null)
     const [filter, setFilter] = useState('all')
@@ -85,7 +87,7 @@ export default function BranchDashboard({ branchId: viewBranchId, viewer }) {
         <>
             <PageHeader
                 title={`สาขา${branch.name}`}
-                sub={`สาขา #${branch.code.replace(/^B/, '')} · ${branch.region} · อัปเดต ${time(new Date())}`}
+                sub={`สาขา #${branch.code.replace(/^B/, '')} · ${branch.region} · อัปเดต ${time(dash.updatedAt)}`}
                 actions={
                     viewer ? (
                         <Button variant="chip" onClick={() => navigate(`${base}/branches`)}><ChevronLeft size={16} /> ทุกสาขา</Button>

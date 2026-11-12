@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
+import { useNow } from '../../lib/useNow'
 import { useSocket } from '../../lib/socket'
 import { REQUEST_STATUS, SOURCE, countdown, date, isToday, minutesUntil, time, weight , num } from '../../lib/format'
 import { Badge, Button, Card, Empty, ErrorBox, Loading, Modal, Notice, PageHeader, Segmented, Select, StatusBadge, Stepper, Table, Tabs } from '../../components/ui'
@@ -84,6 +85,7 @@ export default function AdminRequests() {
 
 function ApprovePanel({ id }) {
     const navigate = useNavigate()
+    useNow() // เวลา/นับถอยหลังบนหน้าเดินเองทุก 30 วินาที
     const { data: r, error, loading, reload } = useApi(`/requests/${id}`)
     const wh = useApi('/warehouse/stock')
     const [approve, setApprove] = useState({})

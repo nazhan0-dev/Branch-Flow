@@ -2,18 +2,25 @@ const router = require('express').Router()
 const { query, one } = require('../config/db')
 const { handle } = require('../config/errors')
 const { authCheck, requireRole, assertBranchAccess } = require('../middlewares/auth')
+const { ensureSummaries } = require('../services/summary')
 
 // แจ้งเตือนของผู้ใช้: ส่งถึงตัวเอง หรือส่งถึงทั้งบทบาท (สาขาเห็นเฉพาะของสาขาตัวเอง)
 const notifWhere = (u) => {
     if (u.role === 'branch') return ['(user_id = ? OR (role = ? AND branch_id = ?))', [u.id, 'branch', u.branchId]]
-    if (u.role === 'executive') return ['(user_id = ? OR role IN (?))', [u.id, ['executive', 'admin']]]
+    // ผู้บริหาร: เฉพาะสรุปผล (role = executive) ไม่เห็นแจ้งเตือนงานรายเคสของคลัง
     return ['(user_id = ? OR (role = ? AND branch_id IS NULL))', [u.id, u.role]]
 }
+// แสดงในหน้าต่างแจ้งเตือนย้อนหลังกี่วัน (เก่ากว่านี้ไม่แสดง แต่ยังอยู่ในฐานข้อมูล)
+const SHOW_DAYS = { executive: 30 }
+const DEFAULT_SHOW_DAYS = 7
+const recent = (u) => `created_at >= UTC_TIMESTAMP() - INTERVAL ${SHOW_DAYS[u.role] || DEFAULT_SHOW_DAYS} DAY`
 
 router.get('/notifications', authCheck, handle(async (req, res) => {
+    // สรุปของวัน/สัปดาห์ที่จบไปแล้วแต่ยังไม่ได้สร้าง (เช่นเซิร์ฟเวอร์ปิดอยู่ตอนเที่ยงคืน) สร้างตอนเปิดดู
+    if (req.user.role === 'executive') await ensureSummaries()
     const [w, p] = notifWhere(req.user)
-    const items = await query(`SELECT id, type, message, link, read_at AS readAt, created_at AS createdAt FROM notification WHERE ${w} ORDER BY id DESC LIMIT 50`, p)
-    const unread = await one(`SELECT COUNT(*) AS n FROM notification WHERE ${w} AND read_at IS NULL`, p)
+    const items = await query(`SELECT id, type, message, link, read_at AS readAt, created_at AS createdAt FROM notification WHERE ${w} AND ${recent(req.user)} ORDER BY created_at DESC, id DESC LIMIT 50`, p)
+    const unread = await one(`SELECT COUNT(*) AS n FROM notification WHERE ${w} AND ${recent(req.user)} AND read_at IS NULL`, p)
     res.json({ unread: unread.n, items })
 }))
 

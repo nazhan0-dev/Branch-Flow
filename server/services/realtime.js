@@ -1,5 +1,6 @@
 // ห้อง (room) ของ Socket.io แยกตามสิทธิ์
-//   ops            = admin + ผู้บริหาร (เห็นทุกอย่าง)
+//   ops            = admin + ผู้บริหาร (ข้อมูลอัปเดตทุกอย่าง: รถ, คำขอ, สต็อก)
+//   admin / exec   = แจ้งเตือนแยกกัน: คลังได้แจ้งเตือนงานรายเคส ผู้บริหารได้เฉพาะสรุปผล
 //   branch:<id>    = พนักงานสาขานั้น
 //   driver:<id>    = คนขับคนนั้น
 // สาขาจึงไม่ได้รับพิกัดของรถที่ไม่ได้มาสาขาตัวเอง
@@ -10,7 +11,8 @@ const setIO = (server) => {
 }
 
 const roomsFor = (user) => {
-    if (user.role === 'admin' || user.role === 'executive') return ['ops']
+    if (user.role === 'admin') return ['ops', 'admin']
+    if (user.role === 'executive') return ['ops', 'exec']
     if (user.role === 'branch') return [`branch:${user.branchId}`]
     if (user.role === 'driver') return [`driver:${user.id}`]
     return []

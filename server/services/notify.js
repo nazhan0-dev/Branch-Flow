@@ -17,7 +17,8 @@ const notify = async (target, type, message, link = null, conn) => {
 
     if (target.userId && target.role === 'driver') emit(`driver:${target.userId}`, 'notification', payload)
     else if (target.role === 'branch') emit(`branch:${target.branchId}`, 'notification', payload)
-    else if (target.role === 'admin' || target.role === 'executive') emit('ops', 'notification', payload)
+    else if (target.role === 'admin') emit('admin', 'notification', payload)
+    else if (target.role === 'executive') emit('exec', 'notification', payload)
 }
 
 module.exports = { notify }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Phone, Search, X } from 'lucide-react'
 import api from '../../api/client'
@@ -6,7 +6,7 @@ import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { TRIP_STATUS, num, time } from '../../lib/format'
 import TripMap, { MAP_COLORS } from '../../components/TripMap'
-import { Avatar, Badge, Button, Card, Empty, ErrorBox, Loading, Select, StatusBadge, Timeline } from '../../components/ui'
+import { Avatar, Badge, Button, Card, Empty, ErrorBox, HeaderSlot, Loading, Select, StatusBadge, Timeline } from '../../components/ui'
 
 const ACTIVE = ['assigned', 'accepted', 'on_route']
 const FILTERS = [
@@ -18,6 +18,7 @@ const FILTERS = [
 
 // แผนที่รวม: Admin เลือกเที่ยวเพื่อดูเส้นทาง / ผู้บริหารดูอย่างเดียว
 export default function LiveMap({ readOnly }) {
+    const headerExtra = useContext(HeaderSlot)
     const { id } = useParams()
     const navigate = useNavigate()
     const base = readOnly ? '/exec/trips' : '/admin/trips'
@@ -109,6 +110,8 @@ export default function LiveMap({ readOnly }) {
                     <span className="ml-auto" />
                     <Select variant="pill" label="สถานะ" value={status} onChange={setStatus} options={FILTERS} align="right" />
                     {!readOnly && <Button onClick={() => navigate('/admin/planner')}>+ สร้างเที่ยวส่ง</Button>}
+                    {/* หน้านี้ไม่มีหัวหน้า → ของมุมบนขวาจาก Layout (กระดิ่งผู้บริหาร) วางบนแผนที่แทน */}
+                    {headerExtra && <span className="self-center rounded-xl shadow-sm">{headerExtra}</span>}
                 </div>
 
                 {trip && (

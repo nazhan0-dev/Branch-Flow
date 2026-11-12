@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { baht, num, time } from '../../lib/format'
-import { Badge, Bar, Button, Card, Empty, ErrorBox, Kpi, Loading, PageHeader, Select } from '../../components/ui'
+import { Badge, Bar, Button, Card, CountUp, Empty, ErrorBox, Kpi, Loading, PageHeader, Select, useSeen } from '../../components/ui'
 import LineChart, { LegendTotals } from '../../components/LineChart'
 
 const RANGES = [7, 30, 90]
@@ -42,7 +42,7 @@ const exportReport = (data) => {
 
 export default function Overview() {
     const [days, setDays] = useState(7)
-    const { data, error, loading, reload } = useApi(`/dashboard/overview?days=${days}`)
+    const { data, error, loading, reload, updatedAt } = useApi(`/dashboard/overview?days=${days}`, [], { poll: 60000 })
     const refresh = useCallback(() => reload(), [reload])
     useSocket('trip_changed', refresh)
     useSocket('requests_changed', refresh)
@@ -57,7 +57,7 @@ export default function Overview() {
         <>
             <PageHeader
                 title="ภาพรวมการกระจายสินค้า"
-                sub={`ข้อมูลทุกสาขา อัปเดตล่าสุด ${time(new Date())}`}
+                sub={`ข้อมูลทุกสาขา อัปเดตล่าสุด ${time(updatedAt)}`}
                 actions={
                     <>
                         <Select variant="pill" ariaLabel="ช่วงเวลา" value={days} onChange={(v) => setDays(Number(v))} options={RANGES.map((d) => [d, `${d} วันล่าสุด`])} align="right" />
@@ -91,7 +91,7 @@ export default function Overview() {
                     {frequentOut.length === 0 && <Empty>ไม่มีสาขาที่ของหมดในช่วงนี้</Empty>}
                     {frequentOut.map((b, i) => (
                         <div key={b.id} className="mb-3">
-                            <div className="mb-1.5 flex justify-between text-sm"><span>{b.name}</span><b>{b.times}</b></div>
+                            <div className="mb-1.5 flex justify-between text-sm"><span>{b.name}</span><b><CountUp value={b.times} /></b></div>
                             <Bar pct={(100 * b.times) / frequentOut[0].times} tone={i < 2 ? 'dark' : 'gray'} className="w-full" />
                         </div>
                     ))}
@@ -158,16 +158,23 @@ function Fleet({ vehicles }) {
     const used = vehicles.find((v) => v.status === 'in_use')?.n || 0
     const pct = total ? Math.round((100 * used) / total) : 0
     const C = 2 * Math.PI * 78
+    const [ref, seen] = useSeen()
     return (
         <Card className="flex flex-col">
             <div className="text-lg font-semibold">อัตราการใช้รถ</div>
-            <div className="relative mx-auto my-4 size-[190px]">
+            {/* วงแหวนวิ่งจาก 0 + ตัวเลขนับขึ้น ตอนเลื่อนมาเห็น */}
+            <div ref={ref} className="relative mx-auto my-4 size-[190px]">
                 <svg viewBox="0 0 190 190" className="-rotate-90">
                     <circle cx="95" cy="95" r="78" fill="none" stroke="#eef0ed" strokeWidth="20" />
-                    <circle className="bl-gauge" cx="95" cy="95" r="78" fill="none" stroke="#22a45d" strokeWidth="20" strokeLinecap="round" strokeDasharray={`${(C * pct) / 100} ${C}`} />
+                    <circle
+                        cx="95" cy="95" r="78" fill="none" stroke="#22a45d" strokeWidth="20" strokeLinecap="round"
+                        strokeDasharray={`${seen ? (C * pct) / 100 : 0} ${C}`}
+                        opacity={seen && pct > 0 ? 1 : 0}
+                        style={{ transition: 'stroke-dasharray 1.1s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.2s' }}
+                    />
                 </svg>
                 <div className="absolute inset-0 grid place-content-center text-center">
-                    <div className="text-[34px] font-semibold">{pct}%</div>
+                    <div className="text-[34px] font-semibold"><CountUp value={`${pct}%`} duration={1100} /></div>
                     <div className="text-xs text-muted">ใช้งานอยู่ {used}/{total} คัน</div>
                 </div>
             </div>
@@ -184,18 +191,23 @@ function RequestMix({ rows }) {
         ['ร่างอัตโนมัติ', n(['draft']), 'bg-[#e3e6e1]'],
     ]
     const total = rows.reduce((t, r) => t + r.n, 0)
+    const [ref, seen] = useSeen()
     return (
         <Card>
             <div className="text-lg font-semibold">สถานะคำขอเติมสินค้าวันนี้</div>
             <div className="mb-4 text-xs text-muted">{total} คำขอจากทุกสาขา{n(['rejected']) ? ` · ปฏิเสธ ${n(['rejected'])}` : ''}</div>
-            <div className="mb-5 flex h-4 gap-1 overflow-hidden rounded-md bg-[#f1f3f0]">
-                {total > 0 && parts.map(([l, v, c]) => v > 0 && <div key={l} className={c} style={{ width: `${(100 * v) / total}%` }} />)}
+            {/* แถบสัดส่วน: แต่ละช่วงขยายออกทีละช่วงตอนเลื่อนมาเห็น */}
+            <div ref={ref} className="mb-5 flex h-4 gap-1 overflow-hidden rounded-md bg-[#f1f3f0]">
+                {total > 0 &&
+                    parts.map(([l, v, c], i) =>
+                        v > 0 && <div key={l} className={c} style={{ width: seen ? `${(100 * v) / total}%` : 0, transition: `width 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) ${i * 120}ms` }} />
+                    )}
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                 {parts.map(([l, v, c]) => (
                     <div key={l}>
                         <div className="flex items-center gap-1.5 text-xs text-muted"><i className={`size-2.5 rounded-full ${c}`} />{l}</div>
-                        <div className="text-2xl font-semibold">{num(v)}</div>
+                        <div className="text-2xl font-semibold"><CountUp value={v} /></div>
                     </div>
                 ))}
             </div>

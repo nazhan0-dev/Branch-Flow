@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check as CheckIcon, ChevronDown, Minus, Plus, Search } from 'lucide-react'
 
@@ -13,8 +13,10 @@ const reducedMotion = () => {
 /**
  * ตัวเลขนับขึ้น: รับทั้งตัวเลขและข้อความที่มีตัวเลขอยู่ข้างใน ("฿15.8K", "100%", "1,250")
  * นับจากค่าเดิมไปค่าใหม่ คงรูปแบบเดิมไว้ (คำนำหน้า/ต่อท้าย, ทศนิยม, คอมมา) ข้อความที่ไม่มีตัวเลขแสดงตรง ๆ
+ * เริ่มนับตอนเลื่อนมาเห็นครั้งแรก (การ์ดล่างจอจะไม่นับจบไปก่อนผู้ใช้เห็น)
  */
 export const CountUp = ({ value, duration = 700 }) => {
+    const [ref, seen] = useSeen()
     const text = String(value ?? '')
     // เวลา (14:30) และวันที่ (11/11) ไม่ใช่ปริมาณ ไม่ต้องนับ
     const m = /\d[:/]\d/.test(text) ? null : text.match(/^(\D*?)(-?[\d,]*\.?\d+)(.*)$/)
@@ -25,7 +27,7 @@ export const CountUp = ({ value, duration = 700 }) => {
     const from = useRef(shown)
 
     useEffect(() => {
-        if (target == null) return
+        if (target == null || !seen) return
         if (reducedMotion()) return setShown(target)
         const start = performance.now()
         const a = from.current ?? 0
@@ -39,13 +41,13 @@ export const CountUp = ({ value, duration = 700 }) => {
         }
         raf = requestAnimationFrame(tick)
         return () => cancelAnimationFrame(raf)
-    }, [target, duration])
+    }, [target, duration, seen])
 
     if (target == null) return text
     const n = Number(shown).toFixed(decimals)
     const [int, dec] = n.split('.')
     const intText = comma ? Number(int).toLocaleString('en-US') : int
-    return `${m[1]}${intText}${dec ? `.${dec}` : ''}${m[3]}`
+    return <span ref={ref}>{`${m[1]}${intText}${dec ? `.${dec}` : ''}${m[3]}`}</span>
 }
 
 // ชุดคอมโพเนนต์พื้นฐาน ขนาดและสีตรงกับดีไซน์ใน Figma
@@ -135,15 +137,28 @@ export const Kpi = ({ label, value, sub, badge, className = '' }) => (
     </div>
 )
 
-export const PageHeader = ({ title, sub, actions }) => (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-            <h1 className="text-[26px] font-semibold leading-tight md:text-[30px]">{title}</h1>
-            {sub && <p className="mt-1 text-sm text-muted">{sub}</p>}
+// ของที่ Layout ฝากไว้มุมบนขวาของทุกหน้า (เช่นกระดิ่งแจ้งเตือนของผู้บริหาร) ต่อท้ายปุ่มของหน้านั้น
+export const HeaderSlot = createContext(null)
+
+export const PageHeader = ({ title, sub, actions }) => {
+    const extra = useContext(HeaderSlot)
+    return (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+                <h1 className="text-[26px] font-semibold leading-tight md:text-[30px]">{title}</h1>
+                {sub && <p className="mt-1 text-sm text-muted">{sub}</p>}
+            </div>
+            {(actions || extra) && (
+                <div className="flex flex-wrap items-center gap-3">
+                    {actions}
+                    {/* ของจาก Layout (กระดิ่ง) แยกจากปุ่มของหน้าด้วยระยะเพิ่ม + เส้นคั่น */}
+                    {extra && actions && <span aria-hidden className="mx-1 h-6 w-px bg-line" />}
+                    {extra}
+                </div>
+            )}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
-    </div>
-)
+    )
+}
 
 // แท็บแบบกล่องขาว ปุ่มที่เลือกเป็นพื้นดำ (พื้นดำเลื่อนตามแท็บที่เลือก)
 export const Tabs = ({ items, value, onChange, className = '' }) => {
@@ -244,7 +259,7 @@ export const Product = ({ name, sku }) => (
 )
 
 // แถบวิ่งจาก 0 ตอนเลื่อนมาเห็นครั้งแรก (การ์ดที่อยู่ล่างจอจะไม่วิ่งจบไปก่อนผู้ใช้เห็น)
-const useSeen = () => {
+export const useSeen = () => {
     const ref = useRef(null)
     const [seen, setSeen] = useState(false)
     useEffect(() => {

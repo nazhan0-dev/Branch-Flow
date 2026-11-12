@@ -34,19 +34,13 @@ export default function LineChart({ rows, series, tooltip, todayLabel, ticks = 3
     const every = Math.ceil(rows.length / 8)
     const label = (d, i) =>
         todayLabel && i === last ? todayLabel : dayDate(d).toLocaleDateString('th-TH', rows.length <= 7 ? { weekday: 'short', timeZone: 'Asia/Bangkok' } : { day: 'numeric', month: 'short', timeZone: 'Asia/Bangkok' })
-    // hover เป็นทศนิยม: จุดเลื่อนไปตามเส้นระหว่างวัน ค่าที่โชว์คิดตามสัดส่วนระหว่างสองวัน
-    const near = hover != null ? Math.round(hover) : null
-    const h = (() => {
-        if (hover == null) return null
-        const a = Math.floor(hover)
-        const b = Math.min(a + 1, last)
-        const t = hover - a
-        const row = { ...rows[near] }
-        for (const s of series) row[s.key] = Math.round((Number(rows[a][s.key]) || 0) * (1 - t) + (Number(rows[b][s.key]) || 0) * t)
-        return row
-    })()
+    // hover = วันที่ใกล้เมาส์ที่สุด ตัวเลขเป็นยอดจริงของวันนั้นเสมอ
+    // จุด/เส้นประ/กล่องเลื่อนไปวันใหม่แบบนุ่มนวล (transition) จุดเคลื่อนเป็นเส้นตรงตามเส้นกราฟพอดี
+    const near = hover
+    const h = hover != null ? rows[hover] : null
     const main = series[0]
-    const hx = hover != null ? P.l + (hover * (W - P.l - P.r)) / Math.max(last, 1) : 0
+    const hx = hover != null ? x(hover) : 0
+    const SLIDE = 'transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1)'
 
     return (
         <div className="relative">
@@ -59,9 +53,7 @@ export default function LineChart({ rows, series, tooltip, todayLabel, ticks = 3
                 onMouseMove={(e) => {
                     const r = e.currentTarget.getBoundingClientRect()
                     const px = ((e.clientX - r.left) / r.width) * W
-                    const f = Math.max(0, Math.min(last, ((px - P.l) / (W - P.l - P.r)) * last))
-                    // ใกล้จุดของวันไหน (จุดหักขึ้น/ลง) ให้ดูดติดจุดนั้นไว้ โชว์ยอดจริงของวันนั้น
-                    setHover(Math.abs(f - Math.round(f)) < 0.25 ? Math.round(f) : f)
+                    setHover(Math.max(0, Math.min(last, Math.round(((px - P.l) / (W - P.l - P.r)) * last))))
                 }}
             >
                 {lines.map((v) => (
@@ -83,13 +75,13 @@ export default function LineChart({ rows, series, tooltip, todayLabel, ticks = 3
                 ))}
                 {h && (
                     <>
-                        <line x1={hx} x2={hx} y1={P.t} y2={H - P.b} stroke="#9aa097" strokeDasharray="3 3" />
-                        <circle cx={hx} cy={y(h[main.key])} r="6" fill="#fff" stroke={main.color} strokeWidth="3" />
+                        <line x1="0" x2="0" y1={P.t} y2={H - P.b} stroke="#9aa097" strokeDasharray="3 3" style={{ transform: `translateX(${hx}px)`, transition: SLIDE }} />
+                        <circle cx="0" cy="0" r="6" fill="#fff" stroke={main.color} strokeWidth="3" style={{ transform: `translate(${hx}px, ${y(h[main.key])}px)`, transition: SLIDE }} />
                     </>
                 )}
             </svg>
             {h && (
-                <div className="pointer-events-none absolute top-0 rounded-xl border border-line bg-white px-3 py-1.5 text-xs shadow-sm" style={{ left: `clamp(0px, calc(${(hx / W) * 100}% - 70px), calc(100% - 170px))` }}>
+                <div className="pointer-events-none absolute top-0 rounded-xl border border-line bg-white px-3 py-1.5 text-xs shadow-sm" style={{ left: `clamp(0px, calc(${(hx / W) * 100}% - 70px), calc(100% - 170px))`, transition: 'left 0.28s cubic-bezier(0.2, 0.7, 0.2, 1)' }}>
                     <div className="text-muted">{todayLabel && near === last ? `${todayLabel} (ถึงตอนนี้)` : longDate(dayDate(h.day))}</div>
                     <b>{tooltip(h)}</b>
                 </div>

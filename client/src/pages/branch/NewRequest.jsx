@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api, { errMsg } from '../../api/client'
 import { useAuth } from '../../store/auth'
 import { useApi } from '../../lib/useApi'
+import { useNow } from '../../lib/useNow'
 import { num, weight as fmtWeight } from '../../lib/format'
 import { Badge, Button, Card, ErrorBox, Loading, PageHeader, Product, SearchInput, Segmented, Select, Stepper, Table } from '../../components/ui'
 
@@ -17,6 +18,7 @@ const nextRound = () => {
 
 export default function NewRequest() {
     const user = useAuth((s) => s.user)
+    useNow() // เวลา/นับถอยหลังบนหน้าเดินเองทุก 30 วินาที
     const navigate = useNavigate()
     const stock = useApi(`/branches/${user.branchId}/stock`)
     const products = useApi('/products')

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Bell, Boxes, Check, Clock, FileText, Truck, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Bell, Boxes, CalendarRange, Check, Clock, FileText, Truck, X } from 'lucide-react'
 import api from '../api/client'
+import { useAuth } from '../store/auth'
 import { useSocket } from '../lib/socket'
 import { date, isToday, time } from '../lib/format'
 import { Drawer } from './ui'
@@ -22,6 +23,9 @@ const KIND = {
     truck_arrived: ['transport', Clock, 'warn'],
     stop_received: ['transport', Check, 'brand'],
     trip_completed: ['transport', Check, 'brand'],
+    // ผู้บริหาร: สรุปผล
+    daily_summary: ['summary', BarChart3, 'neutral'],
+    weekly_summary: ['summary', CalendarRange, 'brand'],
 }
 const TONE = {
     neutral: 'bg-[#eef0ed] text-ink',
@@ -31,11 +35,13 @@ const TONE = {
 }
 const kindOf = (n) => {
     const k = KIND[n.type] || ['stock', Bell, 'neutral']
-    // ข้อความที่มีคำว่า "ด่วน" นับเป็นหมวดด่วนด้วย
-    return n.message.includes('ด่วน') && k[0] !== 'urgent' ? ['urgent', k[1], 'danger'] : k
+    // ข้อความที่มีคำว่า "ด่วน" นับเป็นหมวดด่วนด้วย (ยกเว้นสรุปผลที่มีตัวเลข "คำขอด่วน")
+    return n.message.includes('ด่วน') && k[0] !== 'urgent' && k[0] !== 'summary' ? ['urgent', k[1], 'danger'] : k
 }
 
 export default function NotificationBell({ variant = 'rail' }) {
+    // ผู้บริหารได้เฉพาะสรุปผลประจำวัน/สัปดาห์ → ไม่มีแท็บกรอง และแสดงเป็นการ์ดตัวเลข
+    const summaryOnly = useAuth((s) => s.user?.role) === 'executive'
     const [data, setData] = useState({ unread: 0, items: [] })
     const [open, setOpen] = useState(false)
     const [tab, setTab] = useState('all')
@@ -152,13 +158,16 @@ export default function NotificationBell({ variant = 'rail' }) {
 
             <Drawer open={open} onClose={closeDrawer}>
                 <div className="flex items-center justify-between">
-                    <h2 className="text-[26px] font-semibold">การแจ้งเตือน</h2>
+                    <div>
+                        <h2 className="text-[26px] font-semibold">{summaryOnly ? 'สรุปผล' : 'การแจ้งเตือน'}</h2>
+                        {summaryOnly && <div className="text-xs text-muted">สรุปประจำวันและประจำสัปดาห์ของทุกสาขา</div>}
+                    </div>
                     <div className="flex items-center gap-2">
                         {data.unread > 0 && <button onClick={readAll} className="px-2 text-[13px] font-semibold">อ่านทั้งหมด</button>}
                         <button aria-label="ปิด" onClick={closeDrawer} className="grid size-9 place-items-center rounded-xl border border-line"><X size={18} /></button>
                     </div>
                 </div>
-                <div className="flex gap-2 overflow-x-auto">
+                <div className={`flex gap-2 overflow-x-auto ${summaryOnly ? 'hidden' : ''}`}>
                     {TABS.map(([k, label]) => (
                         <button key={k} onClick={() => setTab(k)} className={`h-[34px] shrink-0 rounded-xl px-3.5 text-[13px] ${tab === k ? 'bg-ink font-semibold text-white' : 'border border-line'}`}>
                             {label}
@@ -166,8 +175,42 @@ export default function NotificationBell({ variant = 'rail' }) {
                     ))}
                 </div>
                 <div className="-mx-1 flex-1 overflow-y-auto px-1">
-                    {groups.length === 0 && <div className="py-10 text-center text-sm text-muted">ยังไม่มีการแจ้งเตือน</div>}
-                    {groups.map((g) => (
+                    {groups.length === 0 && <div className="py-10 text-center text-sm text-muted">{summaryOnly ? 'ยังไม่มีสรุปผล · สรุปของแต่ละวันจะมาหลังเที่ยงคืน' : 'ยังไม่มีการแจ้งเตือน'}</div>}
+                    {summaryOnly && (
+                        <div className="flex flex-col gap-3 pt-1">
+                            {shown.map((n) => {
+                                const [, Icon, tone] = n.kind
+                                const [title, ...rest] = n.message.split(' · ')
+                                const weekly = n.type === 'weekly_summary'
+                                return (
+                                    <button key={n.id} onClick={() => go('/exec')} className={`rounded-2xl border p-4 text-left transition-colors hover:bg-soft ${weekly ? 'border-brand/30 bg-brand-soft/40' : 'border-line'}`}>
+                                        <div className="flex items-center gap-2.5">
+                                            <span className={`grid size-8 shrink-0 place-items-center rounded-[10px] ${TONE[tone]}`}><Icon size={16} /></span>
+                                            <span className="min-w-0 flex-1 text-sm font-semibold">{title}</span>
+                                            {(!n.readAt || fresh.has(n.id)) && <span aria-label="ใหม่" className="size-2.5 shrink-0 rounded-full bg-danger" />}
+                                        </div>
+                                        {/* ตัวชี้วัด: "ยอดขาย ฿12K (+5%)" → ป้ายเล็ก + ตัวเลข */}
+                                        <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2.5">
+                                            {rest.map((m) => {
+                                                const [, label, value] = m.match(/^(\S+)\s+(.+)$/) || [null, m, '']
+                                                const [v, change] = value.split(/\s(?=\()/)
+                                                return (
+                                                    <div key={m}>
+                                                        <div className="text-[11px] text-muted">{label}</div>
+                                                        <div className="text-[15px] font-semibold tabular-nums">
+                                                            {v}
+                                                            {change && <span className={`ml-1 text-xs font-semibold ${change.includes('-') ? 'text-danger-ink' : 'text-brand-ink'}`}>{change.replace(/[()]/g, '')}</span>}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
+                    {!summaryOnly && groups.map((g) => (
                         <div key={g.label}>
                             <div className="pt-2 pb-1 text-xs text-muted">{g.label}</div>
                             {g.items.map((n) => {

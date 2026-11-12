@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
+import { useNow } from '../../lib/useNow'
 import { SOURCE, countdown, dateTime, minutesUntil, num } from '../../lib/format'
 import { Badge, Button, Card, ErrorBox, Loading, PageHeader, Product, Segmented, Stepper, Table } from '../../components/ui'
 
 // แก้จำนวนในร่าง/คำขอที่ยังไม่อนุมัติ แล้วยืนยันส่งคลัง
 export default function RequestDetail() {
     const { id } = useParams()
+    useNow() // เวลา/นับถอยหลังบนหน้าเดินเองทุก 30 วินาที
     const navigate = useNavigate()
     const { data: r, error, loading } = useApi(`/requests/${id}`)
     const [qty, setQty] = useState({})
