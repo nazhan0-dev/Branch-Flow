@@ -6,7 +6,7 @@ const { notify } = require('../services/notify')
 const { emit } = require('../services/realtime')
 const { requestCode } = require('../services/codes')
 
-const STATUSES = ['draft', 'pending', 'approved', 'in_transit', 'received', 'rejected']
+const STATUSES = ['draft', 'pending', 'approved', 'in_transit', 'received', 'rejected', 'cancelled']
 
 const loadRequest = async (id, user, conn, lock = false) => {
     const r = await one(`SELECT * FROM replenish_request WHERE id = ?${lock ? ' FOR UPDATE' : ''}`, [id], conn)
@@ -191,6 +191,8 @@ router.post('/requests/:id/approve', authCheck, requireRole('admin'), handle(asy
             .filter((a) => !a.s || a.qty > a.s.qty - a.s.reserved_qty)
             .map((a) => ({ productId: a.pid, name: a.s?.name, approved: a.qty, available: a.s ? a.s.qty - a.s.reserved_qty : 0 }))
         if (short.length) fail(409, 'สต็อกคลังไม่พอสำหรับบางรายการ ลดจำนวนหรือจัดสรรก่อน', short)
+        const over = approved.filter((a) => a.qty > items.find((i) => i.product_id === a.pid).qty_requested)
+        if (over.length) fail(400, 'อนุมัติได้ไม่เกินจำนวนที่สาขาขอ')
 
         for (const a of approved) {
             await query('UPDATE request_item SET qty_approved = ? WHERE request_id = ? AND product_id = ?', [a.qty, r.id, a.pid], conn)
@@ -217,6 +219,43 @@ router.post('/requests/:id/reject', authCheck, requireRole('admin'), handle(asyn
     })
     emit('ops', 'requests_changed', {})
     res.json({ ok: true })
+}))
+
+/**
+ * ยกเลิกคำขอ
+ *  - สาขา: ยกเลิกคำขอของตัวเองที่ยังไม่อนุมัติ (ร่าง / รออนุมัติ)
+ *  - Admin: ยกเลิกคำขอที่อนุมัติแล้วแต่ยังไม่ได้จัดเข้าเที่ยว → คืนยอดจองให้คลัง
+ *    (คำขอที่รออนุมัติให้ใช้ "ปฏิเสธ" ส่วนคำขอที่อยู่ในเที่ยวต้องยกเลิกเที่ยวก่อน)
+ * ถ้าสินค้ายังใกล้หมด ระบบจะร่างคำขอใหม่ให้เองในรอบสแกนถัดไป
+ */
+router.post('/requests/:id/cancel', authCheck, requireRole('branch', 'admin'), handle(async (req, res) => {
+    const reason = String(req.body?.reason || '').trim().slice(0, 255)
+    const out = await transaction(async (conn) => {
+        const r = await loadRequest(Number(req.params.id), req.user, conn, true)
+        if (req.user.role === 'branch') {
+            if (!['draft', 'pending'].includes(r.status)) fail(409, 'ยกเลิกได้เฉพาะคำขอที่ยังไม่อนุมัติ ถ้าอนุมัติแล้วให้ติดต่อคลังกลาง')
+        } else {
+            if (r.status === 'pending') fail(409, 'คำขอที่รออนุมัติให้ใช้ปุ่มปฏิเสธ')
+            if (r.status !== 'approved') fail(409, 'ยกเลิกได้เฉพาะคำขอที่อนุมัติแล้วแต่ยังไม่ออกจากคลัง')
+            if (!reason) fail(400, 'ระบุเหตุผลที่ยกเลิก')
+            const stop = await one('SELECT t.code FROM trip_stop ts JOIN trip t ON t.id = ts.trip_id WHERE ts.request_id = ?', [r.id], conn)
+            if (stop) fail(409, `คำขอนี้อยู่ในเที่ยว ${stop.code} ยกเลิกเที่ยวก่อน`)
+            const items = await query('SELECT product_id, qty_approved FROM request_item WHERE request_id = ? AND qty_approved > 0', [r.id], conn)
+            if (items.length) await query('SELECT product_id FROM warehouse_stock WHERE product_id IN (?) FOR UPDATE', [items.map((i) => i.product_id)], conn)
+            for (const it of items) {
+                await query('UPDATE warehouse_stock SET reserved_qty = GREATEST(reserved_qty - ?, 0) WHERE product_id = ?', [it.qty_approved, it.product_id], conn)
+            }
+        }
+        await query("UPDATE replenish_request SET status = 'cancelled', note = COALESCE(?, note) WHERE id = ?", [reason || null, r.id], conn)
+        if (req.user.role === 'branch') {
+            if (r.status === 'pending') await notify({ role: 'admin' }, 'request_cancelled', `${r.code} สาขายกเลิกคำขอ${reason ? `: ${reason}` : ''}`, `/admin/requests/${r.id}`, conn)
+        } else {
+            await notify({ role: 'branch', branchId: r.branch_id }, 'request_cancelled', `${r.code} ถูกยกเลิกโดยคลังกลาง: ${reason}`, `/branch/requests/${r.id}`, conn)
+        }
+        return { id: r.id, branchId: r.branch_id }
+    })
+    emit(['ops', `branch:${out.branchId}`], 'requests_changed', {})
+    res.json({ id: out.id, status: 'cancelled' })
 }))
 
 /**

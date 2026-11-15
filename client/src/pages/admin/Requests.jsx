@@ -13,7 +13,7 @@ const TABS = [
     ['draft', 'ร่างอัตโนมัติ', (r) => r.status === 'draft'],
     ['approved', 'อนุมัติแล้ว', (r) => r.status === 'approved'],
     ['in_transit', 'กำลังส่ง', (r) => r.status === 'in_transit'],
-    ['closed', 'ปิดแล้ว', (r) => ['received', 'rejected'].includes(r.status)],
+    ['closed', 'ปิดแล้ว', (r) => ['received', 'rejected', 'cancelled'].includes(r.status)],
 ]
 
 export const urgencyPill = (r) =>
@@ -90,6 +90,7 @@ function ApprovePanel({ id }) {
     const wh = useApi('/warehouse/stock')
     const [approve, setApprove] = useState({})
     const [rejecting, setRejecting] = useState(false)
+    const [cancelling, setCancelling] = useState(false)
     const [reason, setReason] = useState('')
     const [busy, setBusy] = useState('')
     const [err, setErr] = useState({ message: '', details: null })
@@ -194,10 +195,25 @@ function ApprovePanel({ id }) {
                     <span className="text-[#5d625b]">เพราะคลังไม่พอสำหรับทุกสาขา ระบบแบ่งให้สาขาที่ด่วนและของเหลือน้อยก่อน</span>
                 </Notice>
             )}
-            {r.note && <div className="rounded-2xl bg-soft px-3.5 py-3 text-xs">{r.status === 'rejected' ? 'เหตุผลที่ปฏิเสธ' : 'หมายเหตุจากสาขา'}: {r.note}</div>}
+            {r.note && <div className="rounded-2xl bg-soft px-3.5 py-3 text-xs">{r.status === 'rejected' ? 'เหตุผลที่ปฏิเสธ' : r.status === 'cancelled' ? 'เหตุผลที่ยกเลิก' : 'หมายเหตุจากสาขา'}: {r.note}</div>}
             {r.status === 'draft' && <Notice tone="neutral">รอสาขายืนยัน{r.auto_submit_at ? ` · ระบบจะส่งเข้าคลังเองในอีก ${countdown(minutesUntil(r.auto_submit_at))}` : ''}</Notice>}
             {r.stop && <Button variant="ghost" onClick={() => navigate(`/admin/trips/${r.stop.tripId}`)}>ดูเที่ยวส่ง {r.stop.tripCode}</Button>}
-            {r.status === 'approved' && !r.stop && <Button variant="ghost" onClick={() => navigate('/admin/planner')}>ไปจัดเที่ยวส่ง</Button>}
+            {r.status === 'approved' && !r.stop && !cancelling && (
+                <div className="flex gap-2.5">
+                    <Button variant="danger" className="flex-1" onClick={() => { setCancelling(true); setReason('') }}>ยกเลิกคำขอ</Button>
+                    <Button variant="ghost" className="flex-[2]" onClick={() => navigate('/admin/planner')}>ไปจัดเที่ยวส่ง</Button>
+                </div>
+            )}
+            {r.status === 'approved' && !r.stop && cancelling && (
+                <div className="flex flex-col gap-2">
+                    <div className="text-xs text-muted">ยอดที่จองไว้จะคืนกลับเข้าคลัง และสาขาจะได้รับแจ้ง</div>
+                    <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เหตุผลที่ยกเลิก (สาขาจะเห็นข้อความนี้)" className="h-11 rounded-xl border border-line px-3.5 text-sm outline-none focus:border-ink" />
+                    <div className="flex gap-2.5">
+                        <Button variant="ghost" className="flex-1" onClick={() => setCancelling(false)}>ไม่ยกเลิก</Button>
+                        <Button variant="danger" className="flex-[2] !border-danger" disabled={!reason.trim()} loading={busy === 'cancel'} onClick={() => run('cancel', async () => { await api.post(`/requests/${r.id}/cancel`, { reason }); setCancelling(false) })}>ยืนยันยกเลิกและคืนสต็อก</Button>
+                    </div>
+                </div>
+            )}
 
             {err.message && (
                 <ErrorBox>

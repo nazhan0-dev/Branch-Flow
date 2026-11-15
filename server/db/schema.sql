@@ -94,13 +94,13 @@ CREATE TABLE pos_sale (
 
 -- คำขอเติมสินค้า
 -- source: auto = ระบบร่างให้, branch = สาขาสั่งเอง, hq = คลังเสนอ
--- status: draft → pending → approved → in_transit → received (หรือ rejected)
+-- status: draft → pending → approved → in_transit → received (หรือ rejected / cancelled)
 CREATE TABLE replenish_request (
   id INT AUTO_INCREMENT PRIMARY KEY,
   code VARCHAR(12) NOT NULL UNIQUE,
   branch_id INT NOT NULL,
   source ENUM('auto','branch','hq') NOT NULL,
-  status ENUM('draft','pending','approved','in_transit','received','rejected') NOT NULL,
+  status ENUM('draft','pending','approved','in_transit','received','rejected','cancelled') NOT NULL,
   priority ENUM('normal','urgent') NOT NULL DEFAULT 'normal',
   note VARCHAR(255),
   auto_submit_at DATETIME(3) NULL,     -- ร่างอัตโนมัติจะถูกส่งเองเมื่อถึงเวลานี้

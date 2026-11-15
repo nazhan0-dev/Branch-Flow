@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import api, { errMsg } from '../../api/client'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
@@ -92,6 +93,14 @@ export default function BranchRequests() {
 function RequestPanel({ id }) {
     const navigate = useNavigate()
     const { data: r, error, loading, reload } = useApi(`/requests/${id}`)
+    const [cancelling, setCancelling] = useState(false)
+    const [reason, setReason] = useState('')
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState('')
+    useEffect(() => {
+        setCancelling(false)
+        setErr('')
+    }, [id])
     useSocket('requests_changed', useCallback(() => reload(), [reload]))
     useSocket('trip_changed', useCallback(() => reload(), [reload]))
 
@@ -105,11 +114,13 @@ function RequestPanel({ id }) {
     const steps = [
         { label: r.source === 'auto' ? 'ระบบร่างคำขอ' : r.source === 'hq' ? 'คลังเสนอเติมของ' : 'สาขาสั่งของ', time: dateTime(r.created_at), state: 'done' },
         r.source === 'auto' && { label: 'สาขายืนยันส่งคำขอ', time: r.submitted_at ? time(r.submitted_at) : '', state: r.submitted_at ? 'done' : 'now' },
-        r.status === 'rejected'
+        r.status === 'cancelled'
+            ? { label: 'ยกเลิกแล้ว', time: '', state: 'bad' }
+            : r.status === 'rejected'
             ? { label: 'ถูกปฏิเสธ', time: '', state: 'bad' }
             : { label: 'อนุมัติและจองสต็อก', time: r.approved_at ? time(r.approved_at) : '', state: r.approved_at ? 'done' : r.submitted_at ? 'now' : 'todo' },
-        r.status !== 'rejected' && { label: st ? `ส่งกับ ${st.tripCode}` : 'จัดรถส่ง', time: st?.startedAt ? time(st.startedAt) : '', state: st?.startedAt ? 'done' : st ? 'now' : 'todo' },
-        r.status !== 'rejected' && {
+        !['rejected', 'cancelled'].includes(r.status) && { label: st ? `ส่งกับ ${st.tripCode}` : 'จัดรถส่ง', time: st?.startedAt ? time(st.startedAt) : '', state: st?.startedAt ? 'done' : st ? 'now' : 'todo' },
+        !['rejected', 'cancelled'].includes(r.status) && {
             label: r.status === 'received' ? (issues.length ? 'รับของ · ไม่ครบ' : 'รับของครบ') : st?.status === 'arrived' ? 'รถถึงแล้ว · รอนับของ' : 'รับของ',
             time: r.received_at ? time(r.received_at) : st?.arrivedAt ? time(st.arrivedAt) : '',
             state: r.status === 'received' ? (issues.length ? 'bad' : 'done') : st?.status === 'arrived' ? 'now' : 'todo',
@@ -149,10 +160,45 @@ function RequestPanel({ id }) {
                 )}
             </div>
 
-            {r.note && <div className="rounded-2xl bg-soft px-3.5 py-3 text-xs">{r.status === 'rejected' ? `เหตุผลที่ปฏิเสธ: ${r.note}` : `หมายเหตุ: ${r.note}`}</div>}
+            {r.note && <div className="rounded-2xl bg-soft px-3.5 py-3 text-xs">{r.status === 'rejected' ? `เหตุผลที่ปฏิเสธ: ${r.note}` : r.status === 'cancelled' ? `เหตุผลที่ยกเลิก: ${r.note}` : `หมายเหตุ: ${r.note}`}</div>}
             {issues.length > 0 && <div className="rounded-2xl bg-soft px-3.5 py-3 text-xs">ระบบแจ้งคลังเรื่องของขาด/เสียหายให้แล้ว</div>}
 
-            {['draft', 'pending'].includes(r.status) && <Button variant={r.status === 'draft' ? 'brand' : 'ghost'} onClick={() => navigate(`/branch/requests/${r.id}/edit`)}>{r.status === 'draft' ? 'ตรวจและยืนยันส่งคลัง' : 'แก้จำนวน'}</Button>}
+            {['draft', 'pending'].includes(r.status) && !cancelling && (
+                <>
+                    <Button variant={r.status === 'draft' ? 'brand' : 'ghost'} onClick={() => navigate(`/branch/requests/${r.id}/edit`)}>{r.status === 'draft' ? 'ตรวจและยืนยันส่งคลัง' : 'แก้จำนวน'}</Button>
+                    <Button variant="danger" onClick={() => { setCancelling(true); setReason('') }}>ยกเลิกคำขอ</Button>
+                </>
+            )}
+            {['draft', 'pending'].includes(r.status) && cancelling && (
+                <div className="flex flex-col gap-2">
+                    {r.source === 'auto' && <div className="text-xs text-muted">ถ้าสินค้ายังใกล้หมด ระบบจะร่างคำขอใหม่ให้อีกครั้งภายหลัง</div>}
+                    <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เหตุผล (ไม่บังคับ)" className="h-11 rounded-xl border border-line px-3.5 text-sm outline-none focus:border-ink" />
+                    {err && <ErrorBox>{err}</ErrorBox>}
+                    <div className="flex gap-2.5">
+                        <Button variant="ghost" className="flex-1" onClick={() => setCancelling(false)}>ไม่ยกเลิก</Button>
+                        <Button
+                            variant="danger"
+                            className="flex-[2] !border-danger"
+                            loading={busy}
+                            onClick={async () => {
+                                setBusy(true)
+                                setErr('')
+                                try {
+                                    await api.post(`/requests/${r.id}/cancel`, { reason })
+                                    setCancelling(false)
+                                    await reload()
+                                } catch (e) {
+                                    setErr(errMsg(e))
+                                } finally {
+                                    setBusy(false)
+                                }
+                            }}
+                        >
+                            ยืนยันยกเลิกคำขอ
+                        </Button>
+                    </div>
+                </div>
+            )}
             {st?.status === 'arrived' && r.status === 'in_transit' && <Button variant="brand" size="lg" onClick={() => navigate(`/branch/receive/${r.id}`)}>นับและรับของ</Button>}
             {st && st.status === 'pending' && <Button variant="ghost" onClick={() => navigate(`/branch/track/${st.tripId}`)}>ติดตามรถ</Button>}
         </Card>

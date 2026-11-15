@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Phone, Search, X } from 'lucide-react'
-import api from '../../api/client'
+import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { TRIP_STATUS, num, time } from '../../lib/format'
@@ -147,7 +147,7 @@ export default function LiveMap({ readOnly }) {
             </TripMap>
 
             <div className="grid gap-4 xl:grid-cols-[380px_1fr_300px]">
-                <TripCard trip={trip} trips={visible} selectedId={selectedId} onSelect={(tid) => navigate(`${base}/${tid}`)} />
+                <TripCard trip={trip} trips={visible} selectedId={selectedId} onSelect={(tid) => navigate(`${base}/${tid}`)} readOnly={readOnly} onChanged={() => { reloadList(); loadTrip(); reloadOthers() }} />
                 <DemandCard stock={stock.data} pending={pending.data} lowBranches={lowBranches} readOnly={readOnly} />
                 <FleetCard vehicles={vehicles.data} />
             </div>
@@ -293,7 +293,15 @@ function MapSearch({ value, onChange, trips = [], branches = [], onPickTrip, onP
     )
 }
 
-function TripCard({ trip, trips, selectedId, onSelect }) {
+function TripCard({ trip, trips, selectedId, onSelect, readOnly, onChanged }) {
+    const [cancelling, setCancelling] = useState(false)
+    const [reason, setReason] = useState('')
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState('')
+    useEffect(() => {
+        setCancelling(false)
+        setErr('')
+    }, [trip?.id])
     if (!trip) return <Card><div className="mb-2 text-lg font-semibold">เที่ยวส่ง</div><Empty>ยังไม่มีเที่ยวส่ง</Empty></Card>
     const steps = [
         { label: trip.origin.name, time: trip.startedAt ? `ออก ${time(trip.startedAt)}` : 'รอออกรถ', state: trip.startedAt ? 'done' : 'now' },
@@ -330,7 +338,41 @@ function TripCard({ trip, trips, selectedId, onSelect }) {
                 </div>
                 {trip.driver.phone && <a href={`tel:${trip.driver.phone}`} aria-label="โทรหาคนขับ" className="grid size-10 place-items-center rounded-xl border border-line"><Phone size={18} /></a>}
             </div>
-            <Timeline items={steps} />
+            {trip.status === 'cancelled' ? <div className="rounded-2xl bg-soft px-3.5 py-3 text-xs text-muted">เที่ยวนี้ถูกยกเลิก คำขอกลับไปรอจัดรถใหม่แล้ว</div> : <Timeline items={steps} />}
+            {!readOnly && ['assigned', 'accepted'].includes(trip.status) &&
+                (cancelling ? (
+                    <div className="flex flex-col gap-2">
+                        <div className="text-xs text-muted">คำขอทุกจุดจะกลับไปรอจัดรถ (ยอดจองในคลังยังอยู่) และคนขับจะได้รับแจ้ง</div>
+                        <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เหตุผล เช่น จัดคนขับผิด" className="h-11 rounded-xl border border-line px-3.5 text-sm outline-none focus:border-ink" />
+                        {err && <ErrorBox>{err}</ErrorBox>}
+                        <div className="flex gap-2.5">
+                            <Button variant="ghost" className="flex-1" onClick={() => setCancelling(false)}>ไม่ยกเลิก</Button>
+                            <Button
+                                variant="danger"
+                                className="flex-[2] !border-danger"
+                                disabled={!reason.trim()}
+                                loading={busy}
+                                onClick={async () => {
+                                    setBusy(true)
+                                    setErr('')
+                                    try {
+                                        await api.post(`/trips/${trip.id}/cancel`, { reason })
+                                        setCancelling(false)
+                                        onChanged?.()
+                                    } catch (e) {
+                                        setErr(errMsg(e))
+                                    } finally {
+                                        setBusy(false)
+                                    }
+                                }}
+                            >
+                                ยืนยันยกเลิกเที่ยว
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <Button variant="danger" onClick={() => { setCancelling(true); setReason('') }}>ยกเลิกเที่ยว (ยังไม่ออกจากคลัง)</Button>
+                ))}
         </Card>
     )
 }

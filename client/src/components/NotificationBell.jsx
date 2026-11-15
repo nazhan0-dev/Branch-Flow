@@ -14,6 +14,7 @@ const KIND = {
     hq_proposal: ['stock', Boxes, 'neutral'],
     request_approved: ['stock', Check, 'brand'],
     request_rejected: ['urgent', AlertTriangle, 'danger'],
+    request_cancelled: ['stock', AlertTriangle, 'warn'],
     count_needed: ['urgent', AlertTriangle, 'warn'],
     receive_issue: ['urgent', AlertTriangle, 'warn'],
     stock_out: ['urgent', AlertTriangle, 'danger'],
@@ -23,6 +24,7 @@ const KIND = {
     truck_arrived: ['transport', Clock, 'warn'],
     stop_received: ['transport', Check, 'brand'],
     trip_completed: ['transport', Check, 'brand'],
+    trip_cancelled: ['transport', AlertTriangle, 'warn'],
     // ผู้บริหาร: สรุปผล
     daily_summary: ['summary', BarChart3, 'neutral'],
     weekly_summary: ['summary', CalendarRange, 'brand'],

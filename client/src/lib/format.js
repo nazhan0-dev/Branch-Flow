@@ -26,6 +26,7 @@ export const REQUEST_STATUS = {
     in_transit: ['กำลังจัดส่ง', 'brand'],
     received: ['รับแล้ว', 'neutral'],
     rejected: ['ถูกปฏิเสธ', 'danger'],
+    cancelled: ['ยกเลิกแล้ว', 'neutral'],
 }
 export const SOURCE = { auto: 'ระบบร่าง', branch: 'สาขาสั่งเอง', hq: 'คลังเสนอ' }
 export const TRIP_STATUS = {

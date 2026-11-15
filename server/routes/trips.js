@@ -153,6 +153,29 @@ router.get('/trips/:id', authCheck, handle(async (req, res) => {
     })
 }))
 
+/**
+ * Admin ยกเลิกเที่ยวที่ยังไม่ออกจากคลัง (จัดผิดคน/ผิดรถ)
+ * คำขอทุกจุดกลับไปเป็น "อนุมัติแล้ว · รอจัดรถ" (ยอดจองในคลังยังอยู่) จัดเที่ยวใหม่ได้ทันที
+ * เที่ยวที่ออกเดินทางแล้วยกเลิกไม่ได้ เพราะของออกจากคลังไปแล้ว
+ */
+router.post('/trips/:id/cancel', authCheck, requireRole('admin'), handle(async (req, res) => {
+    const reason = String(req.body?.reason || '').trim().slice(0, 200)
+    if (!reason) fail(400, 'ระบุเหตุผลที่ยกเลิก')
+    const out = await transaction(async (conn) => {
+        const t = await loadTrip(Number(req.params.id), req.user, conn, true)
+        if (!['assigned', 'accepted'].includes(t.status)) fail(409, t.status === 'on_route' ? 'รถออกจากคลังแล้ว ยกเลิกเที่ยวไม่ได้' : 'เที่ยวนี้ปิดไปแล้ว')
+        const stops = await query('SELECT ts.request_id, r.code, r.branch_id FROM trip_stop ts JOIN replenish_request r ON r.id = ts.request_id WHERE ts.trip_id = ?', [t.id], conn)
+        await query('DELETE FROM trip_stop WHERE trip_id = ?', [t.id], conn)
+        await query("UPDATE trip SET status = 'cancelled', finished_at = UTC_TIMESTAMP(3) WHERE id = ?", [t.id], conn)
+        await notify({ userId: t.driver_id, role: 'driver' }, 'trip_cancelled', `งาน ${t.code} ถูกยกเลิก: ${reason}`, '/driver', conn)
+        for (const s of stops) await notify({ role: 'branch', branchId: s.branch_id }, 'trip_cancelled', `${s.code} ถูกถอดจากเที่ยว ${t.code} · รอจัดรถใหม่`, `/branch/requests/${s.request_id}`, conn)
+        return { id: t.id, driverId: t.driver_id, branches: [...new Set(stops.map((s) => `branch:${s.branch_id}`))] }
+    })
+    emit(['ops', `driver:${out.driverId}`, ...out.branches], 'trip_changed', { tripId: out.id })
+    emit('ops', 'requests_changed', {})
+    res.json({ ok: true, status: 'cancelled' })
+}))
+
 router.post('/trips/:id/accept', authCheck, requireRole('driver'), handle(async (req, res) => {
     await transaction(async (conn) => {
         const t = await loadTrip(Number(req.params.id), req.user, conn, true)
