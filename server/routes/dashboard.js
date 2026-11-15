@@ -8,7 +8,8 @@ const { ensureSummaries } = require('../services/summary')
 const notifWhere = (u) => {
     if (u.role === 'branch') return ['(user_id = ? OR (role = ? AND branch_id = ?))', [u.id, 'branch', u.branchId]]
     // ผู้บริหาร: เฉพาะสรุปผล (role = executive) ไม่เห็นแจ้งเตือนงานรายเคสของคลัง
-    return ['(user_id = ? OR (role = ? AND branch_id IS NULL))', [u.id, u.role]]
+    // แจ้งเตือนทั้งบทบาท = ไม่ระบุคน (user_id IS NULL) กันคนขับเห็นงานของคนขับคนอื่น
+    return ['(user_id = ? OR (role = ? AND branch_id IS NULL AND user_id IS NULL))', [u.id, u.role]]
 }
 // แสดงในหน้าต่างแจ้งเตือนย้อนหลังกี่วัน (เก่ากว่านี้ไม่แสดง แต่ยังอยู่ในฐานข้อมูล)
 const SHOW_DAYS = { executive: 30 }
