@@ -1,7 +1,7 @@
 // สร้างตารางใหม่ทั้งหมดและใส่ข้อมูลตัวอย่าง  ⚠️ ข้อมูลเดิมในฐานข้อมูลจะหายทั้งหมด
 // ใช้งาน: npm run db:reset        (ชุดเต็ม 14 สาขา)
 //        npm run db:small        (ชุดเล็ก 2 สาขา 3 สินค้า สำหรับทำความเข้าใจ flow)
-//        npm run db:empty        (ว่างเปล่า: คลังกลาง + สาขา 1 แห่ง + บัญชีบทบาทละ 1 ไม่มีสินค้า/รถ ให้ Admin ตั้งค่าเอง)
+//        npm run db:empty        (ว่างเปล่า: เหลือคลังกลาง + บัญชี Admin และผู้บริหาร ให้ Admin ตั้งค่าเองทั้งหมด)
 try { process.loadEnvFile(require('path').join(__dirname, '..', '.env')) } catch {}
 const fs = require('fs')
 const path = require('path')
@@ -81,8 +81,8 @@ if (SMALL) {
     USERS.splice(0, USERS.length, ...USERS.filter((u) => ['admin@bl.test', 'exec@bl.test', 'ramintra@bl.test', 'latkrabang@bl.test', 'somchai@bl.test'].includes(u[0])))
     VEHICLES.splice(1)
 }
-// ===== เริ่มจากศูนย์: คลังกลาง + สาขารามอินทรา + บัญชีบทบาทละ 1 (Admin, ผู้บริหาร, สาขา, คนขับ) =====
-// ไม่มีสินค้า รถ คำขอ หรือยอดขาย: Admin เพิ่มสินค้า (สต็อกคลังกลาง), รถ (รถและคนขับ), สาขาเพิ่ม (สาขา) เองจากหน้าเว็บ
+// ===== เริ่มจากศูนย์: เหลือคลังกลาง + บัญชี Admin และผู้บริหาร =====
+// ไม่มีสาขา สินค้า รถ คนขับ คำขอ หรือยอดขาย: Admin เพิ่มสินค้า (สต็อกคลังกลาง), รถ/คนขับ (รถและคนขับ), สาขา/พนักงาน (สาขา) เองจากหน้าเว็บ
 const EMPTY = process.argv.includes('--empty')
 
 // [qty, จุดสั่ง, สูงสุด] ของชุดเล็ก
@@ -102,13 +102,12 @@ async function main() {
 
     const c = admin
     if (EMPTY) {
-        await c.query('INSERT INTO branch (code, name, region, address, lat, lng, is_warehouse) VALUES ?', [BRANCHES.filter((b) => ['WH01', 'B0218'].includes(b[0]))])
-        const [[ram]] = await c.query("SELECT id FROM branch WHERE code = 'B0218'")
-        const keep = USERS.filter((u) => ['admin@bl.test', 'exec@bl.test', 'ramintra@bl.test', 'somchai@bl.test'].includes(u[0]))
+        await c.query('INSERT INTO branch (code, name, region, address, lat, lng, is_warehouse) VALUES ?', [[BRANCHES[0]]])
+        const keep = USERS.filter((u) => ['admin', 'executive'].includes(u[2]))
         const hash = await bcrypt.hash(PASSWORD, 10)
-        await c.query('INSERT INTO user (email, password, name, role, branch_id, phone) VALUES ?', [keep.map(([e, n, r, b, ph]) => [e, hash, n, r, b ? ram.id : null, ph])])
+        await c.query('INSERT INTO user (email, password, name, role, phone) VALUES ?', [keep.map(([e, n, r, , ph]) => [e, hash, n, r, ph])])
         await c.end()
-        console.log(`สร้างฐานข้อมูล ${dbName} แบบว่าง: คลังกลาง + สาขารามอินทรา ยังไม่มีสินค้า รถ คำขอ และยอดขาย`)
+        console.log(`สร้างฐานข้อมูล ${dbName} แบบว่าง: เหลือคลังกลาง ยังไม่มีสาขา สินค้า รถ และคนขับ`)
         console.log(`รหัสผ่าน: ${PASSWORD}`)
         console.log(keep.map(([e, n, r]) => `  ${r.padEnd(9)} ${e}  (${n})`).join('\n'))
         return
