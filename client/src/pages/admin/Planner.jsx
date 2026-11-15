@@ -133,7 +133,8 @@ export default function Planner() {
 
                 <TripMap
                     trip={mapTrip}
-                    branches={open.filter((r) => !stops.includes(r.id)).map((r) => ({ ...r, id: r.branchId, outItems: 0, lowItems: 0 }))}
+                    // หมุดสาขาที่ยังไม่ได้เลือก: สาขาเดียวมีหลายคำขอได้ จึงรวมเหลือหมุดเดียวต่อสาขา
+                    branches={[...new Map(open.filter((r) => !stops.includes(r.id)).map((r) => [r.branchId, { ...r, id: r.branchId, outItems: 0, lowItems: 0 }])).values()]}
                     labels
                     className="h-[420px] xl:h-auto xl:min-h-[640px]"
                     onRoute={setRoad}
