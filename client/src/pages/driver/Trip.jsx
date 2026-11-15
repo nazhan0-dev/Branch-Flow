@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronUp, Clock, MapPin, Navigation, Package, Truck } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, MapPin, Navigation, Package, Truck } from 'lucide-react'
 import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
 import { useNow } from '../../lib/useNow'
 import { useSocket } from '../../lib/socket'
-import { TRIP_STATUS, countdown, minutesUntil, time } from '../../lib/format'
+import { TRIP_STATUS, minutesUntil, time } from '../../lib/format'
 import { fmtKm, nearestIndex, roadKm, walkAlong } from '../../lib/geo'
 import TripMap from '../../components/TripMap'
 import { Badge, Button, ErrorBox, Loading, StatusBadge } from '../../components/ui'
@@ -13,7 +13,6 @@ import { Badge, Button, ErrorBox, Loading, StatusBadge } from '../../components/
 const SEND_EVERY_MS = 8000
 const SIM_STEP_MS = 3000
 const SIM_STEP_KM = 0.4 // ระยะต่อรอบในโหมดจำลอง (เร่งให้เห็นผลเร็ว ~8 กม./นาที)
-const GPS_LABEL = { live: 'ส่งตำแหน่งอยู่ (GPS)', sim: 'ส่งตำแหน่งอยู่ (จำลอง)', denied: 'ไม่ได้รับสิทธิ์ GPS', off: 'หยุดส่งตำแหน่ง' }
 
 export default function DriverTrip() {
     const { id } = useParams()
@@ -148,33 +147,43 @@ export default function DriverTrip() {
             {/* --sheet: ยกปุ่ม/ลิขสิทธิ์มุมล่างของ Leaflet ขึ้นไปอยู่เหนือแผ่นข้อมูล (ต้องแสดงลิขสิทธิ์ OSM ไว้เสมอ) */}
             <div className="bl-sheet-map absolute inset-0" style={{ '--sheet': `${sheetH}px` }}><TripMap trip={trip} truck={pos} onRoute={onRouteLoaded} labels className="h-full" rounded="" zoomControl={false} fitPad={[onRoute ? 150 : 90, sheetH + 16]} /></div>
 
-            {/* แถบบน: ระยะถึงจุดถัดไป */}
+            {/* แถบบน: แถวแรก = ย้อนกลับ + เลขเที่ยว (ซ้าย) / สถานะส่งตำแหน่ง (ขวา) · แถวสอง = การ์ดจุดถัดไป */}
             <div className="absolute inset-x-4 top-4 z-[500] flex flex-col gap-2.5">
-                {next && trip.status !== 'completed' ? (
-                    <div className="flex items-center gap-3.5 rounded-[20px] bg-ink p-4 text-white shadow-[0_8px_24px_rgba(20,22,20,0.18)]">
-                        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand"><ArrowUpRight size={24} /></span>
-                        <div className="min-w-0 flex-1">
-                            <div className="text-[22px] font-semibold leading-tight">{fmtKm(km)}</div>
-                            <div className="truncate text-xs text-[#b9beb7]">ไปสาขา{next.branchName}</div>
-                        </div>
-                        <div className="text-right">
-                            <div className="font-semibold">{next.eta ? time(next.eta) : '–'}</div>
-                            <div className="text-[11px] text-[#b9beb7]">{left != null ? countdown(left) : 'ยังไม่ออกรถ'}</div>
-                        </div>
-                    </div>
-                ) : (
-                    // หน้าตาเดียวกับช่องค้นหาบนแผนที่: สูง 44 มุม 14 เงาบาง ไอคอนเทาไม่มีกรอบ
-                    <div className="flex h-11 w-fit items-center rounded-[14px] bg-white pr-3 text-sm shadow-sm">
-                        <button aria-label="ย้อนกลับ" onClick={() => navigate('/driver')} className="grid size-11 shrink-0 place-items-center rounded-l-[14px] text-[#9aa097] transition-colors hover:text-ink"><ChevronLeft size={18} /></button>
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex h-11 items-center rounded-[14px] bg-white pr-3 text-sm shadow-sm">
+                        <button aria-label="ย้อนกลับ" onClick={() => navigate('/driver')} className="grid size-11 shrink-0 place-items-center rounded-l-[14px] text-faint transition-colors hover:text-ink"><ChevronLeft size={18} /></button>
                         <span className="mr-2.5 font-semibold">{trip.code}</span>
                         <StatusBadge map={TRIP_STATUS} value={trip.status} />
                     </div>
-                )}
-                {onRoute && (
-                    <span className="flex w-fit items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold shadow-sm">
-                        <i className={`size-2.5 rounded-full ${gps === 'live' || gps === 'sim' ? 'bg-brand' : 'bg-danger'}`} />
-                        {GPS_LABEL[gps]}
-                    </span>
+                    {onRoute && (
+                        <span className="flex h-11 items-center gap-2 rounded-[14px] bg-white px-3.5 text-xs font-semibold shadow-sm">
+                            <span className="relative flex size-2.5">
+                                {(gps === 'live' || gps === 'sim') && <i className="absolute inset-0 animate-ping rounded-full bg-brand/60" />}
+                                <i className={`relative size-2.5 rounded-full ${gps === 'live' || gps === 'sim' ? 'bg-brand' : 'bg-danger'}`} />
+                            </span>
+                            {gps === 'live' ? 'GPS' : gps === 'sim' ? 'จำลอง' : gps === 'denied' ? 'ไม่มีสิทธิ์ GPS' : 'หยุดส่ง'}
+                        </span>
+                    )}
+                </div>
+
+                {/* การ์ดจุดถัดไป: ชื่อสาขาเป็นตัวหลัก · กล่องขวา = นาทีที่เหลือ (ยังไม่ออกรถ = รอออกรถ) */}
+                {next && trip.status !== 'completed' && (
+                    <div className="bl-pop flex items-center gap-2.5 rounded-[16px] bg-white py-2.5 pr-3 pl-3 shadow-sm">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-brand-soft text-brand-ink"><MapPin size={16} /></span>
+                        <div className="min-w-0 flex-1">
+                            <div className="truncate text-[15px] leading-tight font-semibold">สาขา{next.branchName}</div>
+                            <div className="truncate text-[11px] text-muted tabular-nums">
+                                จุด {next.seq}/{trip.stopCount} · {fmtKm(km)}{onRoute && next.eta ? ` · ถึง ${time(next.eta)}` : ''}
+                            </div>
+                        </div>
+                        {onRoute && next.eta ? (
+                            <span className="shrink-0 rounded-lg bg-brand px-2 py-1 text-xs font-semibold text-white tabular-nums">
+                                {left == null || left <= 0 ? 'ใกล้ถึง' : left >= 60 ? `${Math.floor(left / 60)} ชม. ${left % 60} น.` : `${left} นาที`}
+                            </span>
+                        ) : (
+                            <span className="shrink-0 rounded-lg bg-warn-soft px-2 py-1 text-xs font-semibold text-warn-ink">{trip.status === 'assigned' ? 'รอรับงาน' : 'รอออกรถ'}</span>
+                        )}
+                    </div>
                 )}
             </div>
 
