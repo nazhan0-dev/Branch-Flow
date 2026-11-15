@@ -2,6 +2,7 @@ const router = require('express').Router()
 const bcrypt = require('bcryptjs')
 const { query, one, transaction } = require('../config/db')
 const { fail, handle, posInt } = require('../config/errors')
+const { text, password, email, phone } = require('../config/validate')
 const { authCheck, requireRole } = require('../middlewares/auth')
 const { checkLowStock } = require('../services/replenish')
 const { notify } = require('../services/notify')
@@ -10,30 +11,6 @@ const { emit } = require('../services/realtime')
 // จัดการสาขาและบัญชีพนักงานสาขา: Admin เท่านั้น
 // ปิดสาขาแทนการลบ (ประวัติคำขอ/ยอดขายเก่ายังอยู่) พนักงานของสาขาที่ปิดล็อกอินไม่ได้ทันที
 
-const text = (v, field, max, { min = 1, optional = false } = {}) => {
-    const s = typeof v === 'string' ? v.trim() : ''
-    if (!s && optional) return null
-    if (s.length < min) fail(400, min > 1 ? `${field}ต้องมีอย่างน้อย ${min} ตัวอักษร` : `กรุณากรอก${field}`)
-    if (s.length > max) fail(400, `${field}ยาวเกิน ${max} ตัวอักษร`)
-    return s
-}
-const password = (v) => {
-    const s = typeof v === 'string' ? v : ''
-    if (s.length < 8) fail(400, 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร')
-    if (s.length > 72) fail(400, 'รหัสผ่านยาวเกิน 72 ตัวอักษร')
-    return s
-}
-const email = (v) => {
-    const s = typeof v === 'string' ? v.trim().toLowerCase() : ''
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) || s.length > 120) fail(400, 'อีเมลไม่ถูกต้อง')
-    return s
-}
-const phone = (v) => {
-    const s = typeof v === 'string' ? v.trim() : ''
-    if (!s) return null
-    if (!/^[0-9+\- ]{9,20}$/.test(s)) fail(400, 'เบอร์โทรไม่ถูกต้อง')
-    return s
-}
 // พิกัดต้องอยู่ในประเทศไทยคร่าว ๆ กันปักหมุดผิดทวีป (สลับ lat/lng)
 const coord = (lat, lng) => {
     const a = Number(lat), b = Number(lng)
@@ -179,13 +156,13 @@ router.patch('/branch-users/:id', authCheck, requireRole('admin'), handle(async 
     res.json({ ok: true })
 }))
 
-// ตั้งรหัสผ่านใหม่ให้พนักงานที่ลืมรหัส
+// ตั้งรหัสผ่านใหม่ให้พนักงานที่ลืมรหัส (เครื่องที่ล็อกอินด้วยรหัสเก่าถูกออกจากระบบ)
 router.post('/branch-users/:id/password', authCheck, requireRole('admin'), handle(async (req, res) => {
     const id = posInt(req.params.id, 'id')
     const pw = password(req.body?.password)
     await transaction(async (conn) => {
         await loadStaff(id, conn)
-        await query('UPDATE user SET password = ? WHERE id = ?', [await bcrypt.hash(pw, 10), id], conn)
+        await query('UPDATE user SET password = ?, password_changed = UNIX_TIMESTAMP() WHERE id = ?', [await bcrypt.hash(pw, 10), id], conn)
     })
     res.json({ ok: true })
 }))

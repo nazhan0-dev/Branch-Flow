@@ -2,6 +2,7 @@ const router = require('express').Router()
 const bcrypt = require('bcryptjs')
 const { query, one, transaction } = require('../config/db')
 const { fail, handle, posInt } = require('../config/errors')
+const { text, password, email: emailOf, phone: phoneOf } = require('../config/validate')
 const { authCheck, requireRole } = require('../middlewares/auth')
 const { emit } = require('../services/realtime')
 
@@ -9,18 +10,6 @@ const { emit } = require('../services/realtime')
 const ACTIVE = ['assigned', 'accepted', 'on_route']
 const STATUS = ['available', 'maintenance', 'retired']
 
-const text = (v, field, max, min = 1) => {
-    const s = typeof v === 'string' ? v.trim() : ''
-    if (s.length < min) fail(400, min > 1 ? `${field}ต้องมีอย่างน้อย ${min} ตัวอักษร` : `กรุณากรอก${field}`)
-    if (s.length > max) fail(400, `${field}ยาวเกิน ${max} ตัวอักษร`)
-    return s
-}
-const password = (v) => {
-    const s = typeof v === 'string' ? v : ''
-    if (s.length < 8) fail(400, 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร')
-    if (s.length > 72) fail(400, 'รหัสผ่านยาวเกิน 72 ตัวอักษร')
-    return s
-}
 // เที่ยวที่ยังไม่จบของรถ/คนขับ (ใช้กันส่งซ่อม เลิกใช้ หรือปิดบัญชีระหว่างมีงาน)
 const activeTrip = (col, id, conn) =>
     one(`SELECT id, code, status FROM trip WHERE ${col} = ? AND status IN (?) ORDER BY id DESC LIMIT 1`, [id, ACTIVE], conn)
@@ -92,11 +81,9 @@ const checkDefaultVehicle = async (vid, conn) => {
 }
 
 router.post('/fleet/drivers', authCheck, requireRole('admin'), handle(async (req, res) => {
-    const name = text(req.body?.name, 'ชื่อ', 100, 2)
-    const email = text(req.body?.email, 'อีเมล', 120).toLowerCase()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'รูปแบบอีเมลไม่ถูกต้อง')
-    const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim().slice(0, 20) : ''
-    if (phone && !/^[0-9+\-\s]{9,20}$/.test(phone)) fail(400, 'เบอร์โทรไม่ถูกต้อง')
+    const name = text(req.body?.name, 'ชื่อ', 100, { min: 2 })
+    const email = emailOf(req.body?.email)
+    const phone = phoneOf(req.body?.phone)
     const pw = password(req.body?.password)
     const vid = await checkDefaultVehicle(req.body?.default_vehicle_id)
     if (await one('SELECT id FROM user WHERE email = ?', [email])) fail(409, `อีเมล ${email} มีบัญชีอยู่แล้ว`)
@@ -133,13 +120,13 @@ router.patch('/fleet/drivers/:id', authCheck, requireRole('admin'), handle(async
     res.json({ ok: true })
 }))
 
-// ตั้งรหัสผ่านใหม่ให้คนขับที่ลืมรหัส
+// ตั้งรหัสผ่านใหม่ให้คนขับที่ลืมรหัส (เครื่องที่ล็อกอินด้วยรหัสเก่าถูกออกจากระบบ)
 router.post('/fleet/drivers/:id/password', authCheck, requireRole('admin'), handle(async (req, res) => {
     const id = posInt(req.params.id, 'id')
     const pw = password(req.body?.password)
     const u = await one("SELECT id FROM user WHERE id = ? AND role = 'driver'", [id])
     if (!u) fail(404, 'ไม่พบคนขับ')
-    await query('UPDATE user SET password = ? WHERE id = ?', [await bcrypt.hash(pw, 10), id])
+    await query('UPDATE user SET password = ?, password_changed = UNIX_TIMESTAMP() WHERE id = ?', [await bcrypt.hash(pw, 10), id])
     res.json({ ok: true })
 }))
 

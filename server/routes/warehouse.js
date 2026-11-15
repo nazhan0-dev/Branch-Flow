@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { query, one, transaction } = require('../config/db')
 const { fail, handle, posInt } = require('../config/errors')
+const { text, decimal } = require('../config/validate')
 const { authCheck, requireRole } = require('../middlewares/auth')
 const { checkLowStock } = require('../services/replenish')
 const { emit } = require('../services/realtime')
@@ -62,22 +63,6 @@ router.post('/warehouse/receive', authCheck, requireRole('admin'), handle(async 
     })
     res.status(201).json({ ok: true })
 }))
-
-// ข้อความไม่ว่าง ไม่ยาวเกินคอลัมน์ในฐานข้อมูล
-const text = (v, field, max) => {
-    const s = typeof v === 'string' ? v.trim() : ''
-    if (!s) fail(400, `กรุณากรอก${field}`)
-    if (s.length > max) fail(400, `${field}ยาวเกิน ${max} ตัวอักษร`)
-    return s
-}
-// ตัวเลขทศนิยมในช่วงที่กำหนด (น้ำหนัก ราคา)
-const decimal = (v, field, { min = 0, max, gt } = {}) => {
-    const n = Number(v)
-    if (v === '' || v === null || v === undefined || !Number.isFinite(n)) fail(400, `${field}ต้องเป็นตัวเลข`)
-    if (gt !== undefined ? n <= gt : n < min) fail(400, `${field}ต้องมากกว่า ${gt ?? min}`)
-    if (max !== undefined && n > max) fail(400, `${field}ต้องไม่เกิน ${max}`)
-    return n
-}
 
 /**
  * Admin เพิ่มสินค้าใหม่ บันทึก 3 ที่ใน transaction เดียว (พังกลางทางจะไม่เหลือข้อมูลครึ่ง ๆ):

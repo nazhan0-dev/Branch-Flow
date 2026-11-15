@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
 import { MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
-import { Copy, KeyRound, MapPin, Pencil, RefreshCw, UserPlus } from 'lucide-react'
+import { KeyRound, MapPin, Pencil, UserPlus } from 'lucide-react'
 import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
 import { Avatar, Badge, Button, Card, ErrorBox, Modal, Notice, Select, Table } from '../../components/ui'
+import { ConfirmModal, CredentialModal, EMAIL_RE, FIELD, Field, PasswordInput, PasswordModal, tempPassword } from '../../components/accounts'
 
 /**
  * Admin จัดการสาขา
@@ -15,34 +16,6 @@ import { Avatar, Badge, Button, Card, ErrorBox, Modal, Notice, Select, Table } f
  */
 
 const REGIONS = ['กรุงเทพฯ และปริมณฑล', 'ภาคกลาง', 'ภาคเหนือ', 'ภาคตะวันออกเฉียงเหนือ', 'ภาคตะวันออก', 'ภาคตะวันตก', 'ภาคใต้']
-const FIELD = 'h-11 w-full rounded-xl border border-line bg-white px-3.5 text-sm outline-none transition-shadow placeholder:text-faint focus:border-ink/30 focus:shadow-[0_0_0_4px_rgba(20,22,20,0.06)]'
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-// รหัสผ่านชั่วคราวอ่านง่าย (ตัด 0/O, 1/l/I ที่สับสน) ใช้ crypto ของเบราว์เซอร์
-const tempPassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
-    const pick = (n) => Array.from(crypto.getRandomValues(new Uint32Array(n)), (x) => chars[x % chars.length]).join('')
-    return `${pick(4)}-${pick(4)}`
-}
-
-const Field = ({ label, hint, group, children }) => {
-    const Tag = group ? 'div' : 'label'
-    return (
-        <Tag className="flex min-w-0 flex-col gap-1.5" {...(group ? { role: 'group', 'aria-label': label } : {})}>
-            <span className="text-xs font-medium text-[#4a4f48]">{label}</span>
-            {children}
-            {hint && <span className="text-[11px] text-faint">{hint}</span>}
-        </Tag>
-    )
-}
-
-const PasswordInput = ({ label, value, onChange }) => (
-    <div className="flex gap-2">
-        <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} maxLength={72} className={`${FIELD} font-mono`} autoComplete="new-password" />
-        <Button variant="ghost" type="button" onClick={() => onChange(tempPassword())} aria-label="สุ่มรหัสใหม่"><RefreshCw size={15} /></Button>
-    </div>
-)
-
 // ---------- แผนที่ปักหมุด ----------
 
 const PIN = L.divIcon({
@@ -149,6 +122,7 @@ export function AddBranchButton({ onDone }) {
             />
             <CredentialModal
                 cred={cred}
+                who="พนักงานสาขา"
                 onClose={() => {
                     const id = cred?.branchId
                     setCred(null)
@@ -383,8 +357,8 @@ export function BranchManage({ branchId }) {
 
             <BranchFormModal open={!!modal?.edit} branch={b} onClose={() => setModal(null)} onDone={() => { setModal(null); setNotice('บันทึกข้อมูลสาขาแล้ว'); reload() }} />
             <AddStaffModal branch={modal?.add ? b : null} onClose={() => setModal(null)} onDone={(cred) => { setModal({ cred }); reload() }} />
-            <PasswordModal user={modal?.password} onClose={() => setModal(null)} onDone={(cred) => setModal({ cred })} />
-            <CredentialModal cred={modal?.cred} onClose={() => setModal(null)} />
+            <PasswordModal user={modal?.password} endpoint={`/branch-users/${modal?.password?.id}/password`} who="พนักงาน" onClose={() => setModal(null)} onDone={(cred) => setModal({ cred })} />
+            <CredentialModal cred={modal?.cred} who="พนักงานสาขา" onClose={() => setModal(null)} />
             <ConfirmModal c={modal?.confirm} onClose={() => setModal(null)} />
         </Card>
     )
@@ -434,103 +408,6 @@ function AddStaffModal({ branch, onClose, onDone }) {
                 </Field>
                 <ErrorBox>{err}</ErrorBox>
                 <Button size="lg" disabled={!ready} loading={busy} onClick={save}>สร้างบัญชีพนักงาน</Button>
-            </div>
-        </Modal>
-    )
-}
-
-function PasswordModal({ user, onClose, onDone }) {
-    const [pw, setPw] = useState('')
-    const [busy, setBusy] = useState(false)
-    const [err, setErr] = useState('')
-    useEffect(() => {
-        if (user) {
-            setPw(tempPassword())
-            setErr('')
-        }
-    }, [user])
-    const save = async () => {
-        setBusy(true)
-        setErr('')
-        try {
-            await api.post(`/branch-users/${user.id}/password`, { password: pw })
-            onDone({ name: user.name, email: user.email, password: pw })
-        } catch (e) {
-            setErr(errMsg(e))
-        } finally {
-            setBusy(false)
-        }
-    }
-    return (
-        <Modal open={!!user} onClose={onClose} title={user ? `ตั้งรหัสผ่านใหม่ · ${user.name}` : ''} width={440}>
-            <div className="flex flex-col gap-4">
-                <p className="text-sm text-muted">ใช้เมื่อพนักงานลืมรหัส รหัสเดิมจะใช้ไม่ได้ทันที</p>
-                <Field label="รหัสผ่านใหม่" group hint="อย่างน้อย 8 ตัวอักษร">
-                    <PasswordInput label="รหัสผ่านใหม่" value={pw} onChange={setPw} />
-                </Field>
-                <ErrorBox>{err}</ErrorBox>
-                <Button size="lg" disabled={pw.length < 8} loading={busy} onClick={save}>บันทึกรหัสใหม่</Button>
-            </div>
-        </Modal>
-    )
-}
-
-// แสดงอีเมลและรหัสให้ Admin ส่งต่อพนักงาน (ครั้งเดียว ระบบไม่เก็บรหัสจริง)
-function CredentialModal({ cred, onClose }) {
-    const [copied, setCopied] = useState(false)
-    useEffect(() => setCopied(false), [cred])
-    if (!cred) return null
-    const text = `BranchFlow · บัญชีพนักงานสาขา\nอีเมล: ${cred.email}\nรหัสผ่าน: ${cred.password}`
-    const copy = async () => {
-        try {
-            await navigator.clipboard.writeText(text)
-            setCopied(true)
-        } catch {
-            setCopied(false)
-        }
-    }
-    return (
-        <Modal open onClose={onClose} title={cred.isNew ? `สร้างบัญชี ${cred.name} แล้ว` : `ตั้งรหัสใหม่ให้ ${cred.name} แล้ว`} width={440}>
-            <div className="flex flex-col gap-4">
-                {cred.note && <div className="text-sm text-muted">{cred.note}</div>}
-                <div className="rounded-2xl bg-soft p-4 text-sm">
-                    <div className="text-xs text-muted">อีเมล</div>
-                    <div className="mb-2 font-semibold">{cred.email}</div>
-                    <div className="text-xs text-muted">รหัสผ่าน</div>
-                    <div className="font-mono text-lg font-semibold tracking-wide">{cred.password}</div>
-                </div>
-                <Notice tone="warn">ส่งข้อมูลนี้ให้พนักงานตอนนี้ ระบบเก็บรหัสแบบเข้ารหัส ปิดหน้าต่างแล้วจะดูรหัสนี้อีกไม่ได้</Notice>
-                <div className="flex gap-2.5">
-                    <Button variant="ghost" size="lg" className="flex-1" onClick={copy}><Copy size={16} /> {copied ? 'คัดลอกแล้ว' : 'คัดลอก'}</Button>
-                    <Button size="lg" className="flex-1" onClick={onClose}>เสร็จ</Button>
-                </div>
-            </div>
-        </Modal>
-    )
-}
-
-function ConfirmModal({ c, onClose }) {
-    const [busy, setBusy] = useState(false)
-    if (!c) return null
-    return (
-        <Modal open onClose={onClose} title={c.title} width={420}>
-            <p className="mb-5 text-sm text-muted">{c.body}</p>
-            <div className="flex gap-2.5">
-                <Button variant="ghost" size="lg" className="flex-1" onClick={onClose}>ยกเลิก</Button>
-                <Button
-                    variant="danger"
-                    size="lg"
-                    className="flex-1"
-                    loading={busy}
-                    onClick={async () => {
-                        setBusy(true)
-                        await c.run()
-                        setBusy(false)
-                        onClose()
-                    }}
-                >
-                    {c.ok}
-                </Button>
             </div>
         </Modal>
     )
