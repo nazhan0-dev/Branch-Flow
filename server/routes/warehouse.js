@@ -101,12 +101,17 @@ router.post('/products', authCheck, requireRole('admin'), handle(async (req, res
 
     const out = await transaction(async (conn) => {
         if (await one('SELECT id FROM product WHERE sku = ?', [sku], conn)) fail(409, `รหัสสินค้า ${sku} มีอยู่แล้ว`)
-        const ins = await query('INSERT INTO product (sku, name, category, unit, weight_kg, price) VALUES (?, ?, ?, ?, ?, ?)', [sku, name, category, unit, weightKg, price], conn)
+        const ins = await query(
+            'INSERT INTO product (sku, name, category, unit, weight_kg, price, branch_reorder_point, branch_max_qty) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [sku, name, category, unit, weightKg, price, reorderPoint, maxQty],
+            conn
+        )
         const pid = ins.insertId
         await query('INSERT INTO warehouse_stock (product_id, qty, reorder_point) VALUES (?, ?, ?)', [pid, qty, whReorder], conn)
         if (qty > 0) {
             await query("INSERT INTO stock_movement (branch_id, product_id, `change`, reason, user_id, note) VALUES (NULL, ?, ?, 'purchase', ?, 'สินค้าใหม่: สต็อกเริ่มต้น')", [pid, qty, req.user.id], conn)
         }
+        // สาขาที่ปิดอยู่ก็ได้แถวสต็อกด้วย (เปิดกลับมาจะได้ครบ) แต่ร่างคำขอเฉพาะสาขาที่เปิด (checkLowStock ข้ามสาขาที่ปิด)
         const branches = await query('SELECT id FROM branch WHERE is_warehouse = 0', [], conn)
         if (branches.length) {
             await query('INSERT INTO branch_stock (branch_id, product_id, qty, reorder_point, max_qty) VALUES ?', [branches.map((br) => [br.id, pid, 0, reorderPoint, maxQty])], conn)

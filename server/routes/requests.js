@@ -104,6 +104,9 @@ router.post('/requests', authCheck, requireRole('branch', 'admin'), handle(async
     const priority = req.body?.priority === 'urgent' ? 'urgent' : 'normal'
 
     const created = await transaction(async (conn) => {
+        const br = await one('SELECT active, is_warehouse FROM branch WHERE id = ?', [branchId], conn)
+        if (!br || br.is_warehouse) fail(404, 'ไม่พบสาขา')
+        if (!br.active) fail(409, 'สาขานี้ปิดแล้ว')
         const found = await query('SELECT id FROM product WHERE id IN (?)', [[...items.keys()]], conn)
         if (found.length !== items.size) fail(400, 'มีรหัสสินค้าที่ไม่มีในระบบ')
         const ins = await query(

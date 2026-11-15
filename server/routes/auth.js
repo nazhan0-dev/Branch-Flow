@@ -7,7 +7,11 @@ const { COOKIE, cookieOptions, sign, authCheck } = require('../middlewares/auth'
 router.post('/auth/login', handle(async (req, res) => {
     const { email, password } = req.body || {}
     if (!email || !password) fail(400, 'กรอกอีเมลและรหัสผ่าน')
-    const user = await one('SELECT * FROM user WHERE email = ? AND enabled = 1', [String(email).trim().toLowerCase()])
+    const user = await one(
+        `SELECT u.* FROM user u LEFT JOIN branch b ON b.id = u.branch_id
+         WHERE u.email = ? AND u.enabled = 1 AND (u.branch_id IS NULL OR b.active = 1)`,
+        [String(email).trim().toLowerCase()]
+    )
     // ตอบข้อความเดียวกันทั้งกรณีไม่มีอีเมลและรหัสผิด ไม่บอกใบ้ว่าอีเมลไหนมีในระบบ
     if (!user || !(await bcrypt.compare(String(password), user.password))) fail(401, 'อีเมลหรือรหัสผ่านไม่ถูกต้อง')
 

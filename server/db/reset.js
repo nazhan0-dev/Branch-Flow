@@ -1,6 +1,7 @@
 // สร้างตารางใหม่ทั้งหมดและใส่ข้อมูลตัวอย่าง  ⚠️ ข้อมูลเดิมในฐานข้อมูลจะหายทั้งหมด
 // ใช้งาน: npm run db:reset        (ชุดเต็ม 14 สาขา)
 //        npm run db:small        (ชุดเล็ก 2 สาขา 3 สินค้า สำหรับทำความเข้าใจ flow)
+//        npm run db:empty        (ว่างเปล่า: คลังกลาง + สาขา 1 แห่ง + บัญชีบทบาทละ 1 ไม่มีสินค้า/รถ ให้ Admin ตั้งค่าเอง)
 try { process.loadEnvFile(require('path').join(__dirname, '..', '.env')) } catch {}
 const fs = require('fs')
 const path = require('path')
@@ -80,6 +81,10 @@ if (SMALL) {
     USERS.splice(0, USERS.length, ...USERS.filter((u) => ['admin@bl.test', 'exec@bl.test', 'ramintra@bl.test', 'latkrabang@bl.test', 'somchai@bl.test'].includes(u[0])))
     VEHICLES.splice(1)
 }
+// ===== เริ่มจากศูนย์: คลังกลาง + สาขารามอินทรา + บัญชีบทบาทละ 1 (Admin, ผู้บริหาร, สาขา, คนขับ) =====
+// ไม่มีสินค้า รถ คำขอ หรือยอดขาย: Admin เพิ่มสินค้า (สต็อกคลังกลาง), รถ (รถและคนขับ), สาขาเพิ่ม (สาขา) เองจากหน้าเว็บ
+const EMPTY = process.argv.includes('--empty')
+
 // [qty, จุดสั่ง, สูงสุด] ของชุดเล็ก
 const SMALL_STOCK = {
     B0218: { '0004': [0, 10, 50], '0087': [30, 12, 60], '0112': [150, 40, 200] },
@@ -96,6 +101,18 @@ async function main() {
     await admin.query(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'))
 
     const c = admin
+    if (EMPTY) {
+        await c.query('INSERT INTO branch (code, name, region, address, lat, lng, is_warehouse) VALUES ?', [BRANCHES.filter((b) => ['WH01', 'B0218'].includes(b[0]))])
+        const [[ram]] = await c.query("SELECT id FROM branch WHERE code = 'B0218'")
+        const keep = USERS.filter((u) => ['admin@bl.test', 'exec@bl.test', 'ramintra@bl.test', 'somchai@bl.test'].includes(u[0]))
+        const hash = await bcrypt.hash(PASSWORD, 10)
+        await c.query('INSERT INTO user (email, password, name, role, branch_id, phone) VALUES ?', [keep.map(([e, n, r, b, ph]) => [e, hash, n, r, b ? ram.id : null, ph])])
+        await c.end()
+        console.log(`สร้างฐานข้อมูล ${dbName} แบบว่าง: คลังกลาง + สาขารามอินทรา ยังไม่มีสินค้า รถ คำขอ และยอดขาย`)
+        console.log(`รหัสผ่าน: ${PASSWORD}`)
+        console.log(keep.map(([e, n, r]) => `  ${r.padEnd(9)} ${e}  (${n})`).join('\n'))
+        return
+    }
     await c.query('INSERT INTO branch (code, name, region, address, lat, lng, is_warehouse) VALUES ?', [BRANCHES])
     await c.query('INSERT INTO product (sku, name, category, unit, weight_kg, price) VALUES ?', [PRODUCTS.map((p) => p.slice(0, 6))])
     const [branches] = await c.query('SELECT id, code FROM branch')
@@ -123,6 +140,9 @@ async function main() {
     const tweak = [['B0252', '0004', 0], ['B0110', '0004', 6], ['B0231', '0004', 9], ['B0240', '0004', 8], ['B0231', '0087', 5], ['B0115', '0140', 3]]
     if (!SMALL) for (const [code, sku, qty] of tweak) stock.find((s) => s[0] === bid[code] && s[1] === pid[sku])[2] = qty
     await c.query('INSERT INTO branch_stock (branch_id, product_id, qty, reorder_point, max_qty) VALUES ?', [stock])
+    // ค่ามาตรฐานของสินค้า (ใช้ตอนเปิดสาขาใหม่) = ค่าเฉลี่ยของสาขาที่มีอยู่
+    await c.query(`UPDATE product p JOIN (SELECT product_id, ROUND(AVG(reorder_point)) AS rp, ROUND(AVG(max_qty)) AS mx FROM branch_stock GROUP BY product_id) a ON a.product_id = p.id
+             SET p.branch_reorder_point = a.rp, p.branch_max_qty = GREATEST(a.mx, a.rp + 1)`)
 
     const hash = await bcrypt.hash(PASSWORD, 10)
     await c.query('INSERT INTO user (email, password, name, role, branch_id, phone) VALUES ?', [USERS.map(([e, n, r, b, ph]) => [e, hash, n, r, b ? bid[b] : null, ph])])

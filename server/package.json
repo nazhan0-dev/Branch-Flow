@@ -9,6 +9,7 @@
     "dev": "node --watch server.js",
     "db:reset": "node db/reset.js",
     "db:small": "node db/reset.js --small",
+    "db:empty": "node db/reset.js --empty",
     "db:sales": "node db/seed-sales.js",
     "test:flow": "node db/flow-test.js",
     "pos:sim": "node db/pos-sim.js"

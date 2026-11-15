@@ -15,7 +15,8 @@ CREATE TABLE branch (
   address VARCHAR(255),
   lat DECIMAL(9,6) NOT NULL,
   lng DECIMAL(9,6) NOT NULL,
-  is_warehouse TINYINT(1) NOT NULL DEFAULT 0
+  is_warehouse TINYINT(1) NOT NULL DEFAULT 0,
+  active TINYINT(1) NOT NULL DEFAULT 1   -- 0 = ปิดสาขา (พนักงานล็อกอินไม่ได้ ไม่ร่างคำขอ ประวัติยังอยู่)
 ) ENGINE=InnoDB;
 
 -- ผู้ใช้ 4 บทบาท: branch = พนักงานสาขา, admin = Admin คลัง, driver = พนักงานขนส่ง, executive = ผู้บริหาร
@@ -40,7 +41,9 @@ CREATE TABLE product (
   category VARCHAR(50) NOT NULL,
   unit VARCHAR(20) NOT NULL DEFAULT 'ชิ้น',
   weight_kg DECIMAL(8,3) NOT NULL DEFAULT 0.1,
-  price DECIMAL(10,2) NOT NULL DEFAULT 0
+  price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  branch_reorder_point INT NOT NULL DEFAULT 10,  -- ค่ามาตรฐานของสาขา ใช้ตั้งสต็อกให้สาขาที่เปิดใหม่
+  branch_max_qty INT NOT NULL DEFAULT 50
 ) ENGINE=InnoDB;
 
 -- สต็อกคลังกลาง: reserved_qty = จองไว้ให้คำขอที่อนุมัติแล้วแต่ยังไม่ออกจากคลัง

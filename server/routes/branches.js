@@ -11,12 +11,13 @@ router.get('/products', authCheck, handle(async (req, res) => {
 }))
 
 router.get('/branches', authCheck, handle(async (req, res) => {
-    const where = req.user.role === 'branch' ? 'WHERE id = ?' : ''
+    // ?all=1 (Admin) = รวมสาขาที่ปิดแล้ว ปกติแสดงเฉพาะสาขาที่เปิดอยู่ (แผนที่, ฟอร์มต่าง ๆ)
+    const where = req.user.role === 'branch' ? 'WHERE b.id = ?' : req.query.all === '1' && req.user.role === 'admin' ? '' : 'WHERE b.active = 1'
     res.json(await query(
-        `SELECT b.id, b.code, b.name, b.region, b.address, b.lat, b.lng, b.is_warehouse AS isWarehouse,
+        `SELECT b.id, b.code, b.name, b.region, b.address, b.lat, b.lng, b.is_warehouse AS isWarehouse, b.active,
                 COALESCE(SUM(bs.qty <= 0), 0) AS outItems, COALESCE(SUM(bs.qty > 0 AND bs.qty <= bs.reorder_point), 0) AS lowItems
          FROM branch b LEFT JOIN branch_stock bs ON bs.branch_id = b.id
-         ${where.replace('id', 'b.id')} GROUP BY b.id ORDER BY b.is_warehouse DESC, b.name`,
+         ${where} GROUP BY b.id ORDER BY b.is_warehouse DESC, b.name`,
         [req.user.branchId]
     ))
 }))
@@ -81,8 +82,9 @@ router.post('/branches/:id/sales', posAuth, handle(async (req, res) => {
     }
 
     const result = await transaction(async (conn) => {
-        const branch = await one('SELECT id FROM branch WHERE id = ? AND is_warehouse = 0', [branchId], conn)
+        const branch = await one('SELECT id, active FROM branch WHERE id = ? AND is_warehouse = 0', [branchId], conn)
         if (!branch) fail(404, 'ไม่พบสาขา')
+        if (!branch.active) fail(409, 'สาขานี้ปิดแล้ว')
         const found = await query('SELECT id FROM product WHERE id IN (?)', [[...lines.keys()]], conn)
         if (found.length !== lines.size) fail(400, 'มีรหัสสินค้าที่ไม่มีในระบบ')
 

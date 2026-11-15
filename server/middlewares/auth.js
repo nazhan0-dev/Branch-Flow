@@ -27,13 +27,14 @@ const cookieOptions = () => {
 
 const sign = (user) => jwt.sign({ id: user.id }, process.env.SECRET, { expiresIn: MAX_AGE_MS / 1000 })
 
-// อ่าน token → โหลดผู้ใช้จากฐานข้อมูลทุกครั้ง (บัญชีที่ถูกระงับใช้ไม่ได้ทันที)
+// อ่าน token → โหลดผู้ใช้จากฐานข้อมูลทุกครั้ง (บัญชีที่ถูกระงับ หรือสาขาที่ปิดแล้ว ใช้ไม่ได้ทันที)
 const loadUser = async (token) => {
     if (!token) return null
     try {
         const { id } = jwt.verify(token, process.env.SECRET)
         return await one(
-            'SELECT id, email, name, role, branch_id AS branchId FROM user WHERE id = ? AND enabled = 1',
+            `SELECT u.id, u.email, u.name, u.role, u.branch_id AS branchId FROM user u LEFT JOIN branch b ON b.id = u.branch_id
+             WHERE u.id = ? AND u.enabled = 1 AND (u.branch_id IS NULL OR b.active = 1)`,
             [id]
         )
     } catch {

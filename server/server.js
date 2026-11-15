@@ -42,7 +42,7 @@ app.use((req, res, next) => {
 })
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
-for (const name of ['auth', 'branches', 'requests', 'trips', 'warehouse', 'dashboard', 'fleet']) {
+for (const name of ['auth', 'branches', 'branchAdmin', 'requests', 'trips', 'warehouse', 'dashboard', 'fleet']) {
     app.use('/api', require(`./routes/${name}`))
 }
 app.use('/api', (req, res) => res.status(404).json({ message: 'ไม่พบ API นี้' }))

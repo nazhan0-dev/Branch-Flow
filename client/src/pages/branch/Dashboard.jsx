@@ -26,8 +26,9 @@ export const levelTone = (r) => (r.status === 'out' ? 'danger' : r.status === 'l
  * Dashboard ของสาขา
  * - พนักงานสาขา: ไม่ส่ง props ใช้สาขาของตัวเอง
  * - Admin / ผู้บริหาร: ส่ง branchId + viewer ('admin' | 'executive') ดูอย่างเดียว ไม่มีปุ่มที่เป็นงานของสาขา
+ * - manage: ส่วนจัดการสาขาของ Admin (แสดงใต้หัวหน้า)
  */
-export default function BranchDashboard({ branchId: viewBranchId, viewer }) {
+export default function BranchDashboard({ branchId: viewBranchId, viewer, manage }) {
     const user = useAuth((s) => s.user)
     const navigate = useNavigate()
     const branchId = viewBranchId ?? user.branchId
@@ -100,6 +101,7 @@ export default function BranchDashboard({ branchId: viewBranchId, viewer }) {
                     )
                 }
             />
+            {manage}
 
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
                 <Kpi label="สินค้าใกล้หมด" value={num(s.lowItems)} sub={`จาก ${num(s.totalItems)} รายการในสาขา`} badge={s.lowItems > 0 && <Badge tone="warn">ต้องเติม</Badge>} />

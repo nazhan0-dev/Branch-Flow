@@ -63,8 +63,8 @@ router.get('/dashboard/overview', authCheck, requireRole('admin', 'executive'), 
         periodStats(prevFrom, from),
         one(
             `SELECT (SELECT COUNT(*) FROM trip WHERE status = 'on_route') AS onRoute,
-                    (SELECT COUNT(DISTINCT bs.branch_id) FROM branch_stock bs WHERE bs.qty <= 0) AS branchesOut,
-                    (SELECT COUNT(*) FROM branch WHERE is_warehouse = 0) AS branchCount,
+                    (SELECT COUNT(DISTINCT bs.branch_id) FROM branch_stock bs JOIN branch bb ON bb.id = bs.branch_id WHERE bb.active = 1 AND bs.qty <= 0) AS branchesOut,
+                    (SELECT COUNT(*) FROM branch WHERE is_warehouse = 0 AND active = 1) AS branchCount,
                     (SELECT COUNT(*) FROM replenish_request WHERE status = 'pending') AS pendingRequests`
         ),
         query("SELECT status, COUNT(*) AS n FROM replenish_request WHERE created_at >= UTC_DATE() GROUP BY status"),
@@ -86,7 +86,7 @@ router.get('/dashboard/overview', authCheck, requireRole('admin', 'executive'), 
                     ROUND(100 * AVG(CASE WHEN ts.arrived_at IS NOT NULL AND ts.eta IS NOT NULL THEN ts.arrived_at <= ts.eta + INTERVAL 15 MINUTE END), 1) AS onTimePct
              FROM branch b LEFT JOIN replenish_request r ON r.branch_id = b.id AND r.created_at >= ?
              LEFT JOIN trip_stop ts ON ts.request_id = r.id
-             WHERE b.is_warehouse = 0 GROUP BY b.region ORDER BY branches DESC, b.region`,
+             WHERE b.is_warehouse = 0 AND b.active = 1 GROUP BY b.region ORDER BY branches DESC, b.region`,
             [from]
         ),
         query("SELECT status, COUNT(*) AS n FROM vehicle WHERE status <> 'retired' GROUP BY status"),
@@ -269,7 +269,7 @@ router.get('/dashboard/branches', authCheck, requireRole('admin', 'executive'), 
     const today = bkkDayStart()
     const week = new Date(today.getTime() - 6 * DAY_MS)
     res.json(await query(
-        `SELECT b.id, b.code, b.name, b.region,
+        `SELECT b.id, b.code, b.name, b.region, b.active,
                 COALESCE(st.outItems, 0) AS outItems, COALESCE(st.lowItems, 0) AS lowItems,
                 COALESCE(sa.today, 0) AS salesToday, COALESCE(sa.week, 0) AS sales7d,
                 COALESCE(rq.open, 0) AS openRequests, COALESCE(rq.urgent, 0) AS urgentRequests,
@@ -290,7 +290,7 @@ router.get('/dashboard/branches', authCheck, requireRole('admin', 'executive'), 
          LEFT JOIN (SELECT branch_id, COUNT(*) AS open, SUM(priority = 'urgent') AS urgent
                     FROM replenish_request WHERE status IN ('draft','pending','approved','in_transit') GROUP BY branch_id) rq ON rq.branch_id = b.id
          WHERE b.is_warehouse = 0
-         ORDER BY outItems DESC, lowItems DESC, b.name`,
+         ORDER BY b.active DESC, outItems DESC, lowItems DESC, b.name`,
         [week, week, today, week]
     ))
 }))

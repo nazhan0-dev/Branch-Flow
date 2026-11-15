@@ -15,10 +15,14 @@ const AUTO_SUBMIT_MINUTES = Number(process.env.AUTO_SUBMIT_MINUTES || 120)
  *    แต่ถ้าของหมด (qty <= 0) จะยกระดับคำขอเดิมเป็น "ด่วน"
  *  - จำนวนที่แนะนำ = max_qty − qty (ไม่มีของกำลังมา เพราะเช็กคำขอเปิดแล้ว)
  *  - รวมเข้าร่างเดิมของสาขาถ้ามี ไม่อย่างนั้นสร้างร่างใหม่
- *  - launch = สินค้าใหม่ที่เพิ่งเพิ่ม: สาขาเริ่มที่ 0 เป็นเรื่องปกติ ไม่นับเป็นด่วนและไม่แจ้ง Admin ว่าของหมด
+ *  - launch = ล็อตแรก (สินค้าใหม่ / สาขาใหม่): สต็อกเริ่มที่ 0 เป็นเรื่องปกติ ไม่นับเป็นด่วนและไม่แจ้ง Admin ว่าของหมด
+ *    ส่ง true = สินค้าใหม่ หรือส่งข้อความเพื่อใช้เป็นป้ายในแจ้งเตือน
+ *  - สาขาที่ปิดแล้วไม่ร่างคำขอ
  */
 const checkLowStock = async (conn, branchId, productIds, { launch = false } = {}) => {
     if (!productIds.length) return null
+    const branch = await one('SELECT active FROM branch WHERE id = ?', [branchId], conn)
+    if (!branch || !branch.active) return null
 
     const low = await query(
         `SELECT bs.product_id, bs.qty, bs.reorder_point, bs.max_qty, p.name, p.sku
@@ -79,11 +83,13 @@ const checkLowStock = async (conn, branchId, productIds, { launch = false } = {}
         conn
     )
 
-    const names = toAdd.map((l) => l.name).join(', ')
-    await notify({ role: 'branch', branchId }, 'auto_draft', `ระบบร่างคำขอ ${draft.code}: ${launch ? 'สินค้าใหม่ล็อตแรก ' : ''}${names} · ยืนยันภายใน ${AUTO_SUBMIT_MINUTES} นาที`, `/branch/requests/${draft.id}`, conn)
+    // ข้อความแจ้งเตือนยาวได้ไม่เกิน 255 ตัวอักษร: เกิน 3 รายการให้สรุปเป็นจำนวน
+    const names = toAdd.length > 3 ? `${toAdd.slice(0, 3).map((l) => l.name).join(', ')} และอีก ${toAdd.length - 3} รายการ` : toAdd.map((l) => l.name).join(', ')
+    const tag = launch === true ? 'สินค้าใหม่ล็อตแรก ' : launch ? `${launch} ` : ''
+    await notify({ role: 'branch', branchId }, 'auto_draft', `ระบบร่างคำขอ ${draft.code}: ${tag}${names} · ยืนยันภายใน ${AUTO_SUBMIT_MINUTES} นาที`.slice(0, 255), `/branch/requests/${draft.id}`, conn)
     if (urgent) {
         const b = await one('SELECT name FROM branch WHERE id = ?', [branchId], conn)
-        await notify({ role: 'admin' }, 'stock_out', `สาขา${b.name}: ${toAdd.filter((l) => l.qty <= 0).map((l) => l.name).join(', ')} หมดแล้ว`, `/admin/requests/${draft.id}`, conn)
+        await notify({ role: 'admin' }, 'stock_out', `สาขา${b.name}: ${toAdd.filter((l) => l.qty <= 0).map((l) => l.name).join(', ')} หมดแล้ว`.slice(0, 255), `/admin/requests/${draft.id}`, conn)
     }
     return { requestId: draft.id, code: draft.code, added: toAdd.map((l) => ({ productId: l.product_id, qty: l.suggested })) }
 }
@@ -106,7 +112,9 @@ const submitDueDrafts = async () => {
 
 // ตัวสำรอง: สแกนทุกสาขาหาสินค้าที่ใกล้หมดแต่ยังไม่มีคำขอ (เช่น หลังเปลี่ยน reorder_point)
 const scanAllBranches = async () => {
-    const branches = await query('SELECT DISTINCT branch_id FROM branch_stock WHERE reorder_point > 0 AND qty <= reorder_point')
+    const branches = await query(
+        'SELECT DISTINCT bs.branch_id FROM branch_stock bs JOIN branch b ON b.id = bs.branch_id WHERE b.active = 1 AND bs.reorder_point > 0 AND bs.qty <= bs.reorder_point'
+    )
     let drafted = 0
     for (const { branch_id } of branches) {
         const ids = (await query('SELECT product_id FROM branch_stock WHERE branch_id = ? AND reorder_point > 0 AND qty <= reorder_point', [branch_id])).map((r) => r.product_id)
