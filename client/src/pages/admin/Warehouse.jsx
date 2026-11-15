@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { PackagePlus, Sparkles, Store, Warehouse as WarehouseIcon, X } from 'lucide-react'
 import api, { errMsg } from '../../api/client'
 import { useApi } from '../../lib/useApi'
 import { useSocket } from '../../lib/socket'
@@ -24,6 +25,8 @@ export default function Warehouse() {
     const pending = useApi('/requests?status=pending')
     const [q, setQ] = useState('')
     const [buying, setBuying] = useState(null) // { productId, qty }
+    const [adding, setAdding] = useState(false)
+    const [added, setAdded] = useState(null) // ผลการเพิ่มสินค้าล่าสุด แสดงเป็นแถบแจ้ง
 
     const reloadPending = pending.reload
     const refresh = useCallback(() => {
@@ -53,10 +56,16 @@ export default function Warehouse() {
                 actions={
                     <>
                         <Button variant="chip" onClick={() => exportCsv(data)}>ส่งออก Excel</Button>
+                        <Button variant="chip" onClick={() => setAdding(true)}>+ เพิ่มสินค้า</Button>
                         <Button onClick={() => setBuying({ productId: selected, qty: 100 })}>+ สั่งซื้อเข้าคลัง</Button>
                     </>
                 }
             />
+            {added && (
+                <Notice tone="brand">
+                    เพิ่ม <b>{added.name}</b> ({added.sku}) แล้ว · ร่างคำขอล็อตแรกให้ {added.drafted} จาก {added.branches} สาขา รอสาขายืนยันในหน้าคำขอเติมสินค้า
+                </Notice>
+            )}
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
                 <Kpi label="สินค้าในคลัง" value={num(data.length)} sub={`มูลค่า ${baht(value)}`} badge={<Badge>SKU</Badge>} />
                 <Kpi label="ขอรวมที่รออนุมัติ" value={num(requested)} sub={`ชิ้น จาก ${pending.data?.length ?? 0} คำขอ`} />
@@ -88,6 +97,17 @@ export default function Warehouse() {
                 {selected && <AllocationPanel productId={selected} onBuy={(qty) => setBuying({ productId: selected, qty })} onDone={refresh} />}
             </div>
 
+            <AddProductModal
+                open={adding}
+                categories={[...new Set(data.map((p) => p.category))]}
+                onClose={() => setAdding(false)}
+                onDone={(r) => {
+                    setAdding(false)
+                    setAdded(r)
+                    setParams({ product: r.id })
+                    refresh()
+                }}
+            />
             <BuyModal state={buying} products={data} onClose={() => setBuying(null)} onDone={() => { setBuying(null); refresh() }} />
         </>
     )
@@ -217,6 +237,233 @@ function BuyModal({ state, products, onClose, onDone }) {
                 <Notice tone="neutral">ในเดโมนี้ ของจะเข้าคลังทันทีเหมือนซัพพลายเออร์ส่งมาถึงแล้ว</Notice>
                 <ErrorBox>{err}</ErrorBox>
                 <Button size="lg" disabled={!pid} loading={busy} onClick={save}>ยืนยันรับเข้าคลัง</Button>
+            </div>
+        </Modal>
+    )
+}
+
+const UNITS = ['ชิ้น', 'ซอง', 'กล่อง', 'ขวด', 'กระป๋อง', 'แผง', 'ถุง', 'แพ็ก']
+const NEW_CAT = '__new'
+const EMPTY = { sku: '', name: '', category: '', unit: 'ชิ้น', weight: '', price: '', qty: 0, whReorder: 50, reorder: 10, max: 50 }
+const BOX = 'flex h-11 w-full items-center rounded-xl border border-line bg-white text-sm transition-shadow focus-within:border-ink/30 focus-within:shadow-[0_0_0_4px_rgba(20,22,20,0.06)]'
+const INPUT = 'h-full min-w-0 flex-1 bg-transparent px-3.5 outline-none placeholder:text-faint'
+
+const Field = ({ label, hint, children }) => (
+    <label className="flex min-w-0 flex-col gap-1.5">
+        <span className="text-xs font-medium text-[#4a4f48]">{label}</span>
+        {children}
+        {hint && <span className="text-[11px] text-faint">{hint}</span>}
+    </label>
+)
+// ช่องกรอกพร้อมหน่วยต่อท้ายในกรอบ (กก. / ฿)
+const Input = ({ suffix, className = '', ...rest }) => (
+    <div className={`${BOX} ${className}`}>
+        <input className={INPUT} {...rest} />
+        {suffix && <span className="pr-3.5 text-xs text-muted">{suffix}</span>}
+    </div>
+)
+// ปุ่มตัวเลือกเล็ก ๆ (หน่วย / หมวดที่มีอยู่)
+const Chip = ({ on, children, ...rest }) => (
+    <button type="button" className={`h-8 rounded-[10px] px-3 text-[13px] transition-colors ${on ? 'bg-ink font-semibold text-white' : 'border border-line bg-white hover:bg-soft'}`} {...rest}>
+        {children}
+    </button>
+)
+const StepRow = ({ label, sub, value, onChange, min = 0 }) => (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+        <div className="min-w-0">
+            <div className="text-sm">{label}</div>
+            {sub && <div className="text-[11px] text-muted">{sub}</div>}
+        </div>
+        <Stepper value={value} min={min} onChange={onChange} />
+    </div>
+)
+// หัวกลุ่มในหน้าต่าง: ไอคอน + ชื่อ
+const Group = ({ icon: Icon, title, children }) => (
+    <section className="rounded-2xl border border-[#eef0ed] px-4 pt-3.5 pb-1.5">
+        <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
+            <span className="grid size-7 place-items-center rounded-lg bg-soft text-muted"><Icon size={15} /></span>
+            {title}
+        </div>
+        {children}
+    </section>
+)
+
+// Admin เพิ่มสินค้าใหม่: ข้อมูลสินค้า + สต็อกเริ่มต้นในคลัง + จุดสั่ง/สูงสุดที่ใช้กับทุกสาขา
+function AddProductModal({ open, categories, onClose, onDone }) {
+    const [f, setF] = useState(EMPTY)
+    const [newCat, setNewCat] = useState(false) // กำลังพิมพ์หมวดใหม่แทนการเลือกจากรายการ
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState('')
+    useEffect(() => {
+        if (open) {
+            setF(EMPTY)
+            setNewCat(false)
+            setErr('')
+        }
+    }, [open])
+    const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }))
+    // ช่องตัวเลข: รับเฉพาะตัวเลข + จุดทศนิยมจุดเดียว ทศนิยมไม่เกิน dp ตำแหน่ง (พิมพ์อย่างอื่นไม่ติด)
+    const setNum = (k, dp) => (e) => {
+        const v = e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
+        if (new RegExp(`^\\d{0,7}(\\.\\d{0,${dp}})?$`).test(v)) setF((x) => ({ ...x, [k]: v }))
+    }
+    const ready = f.sku.trim() && f.name.trim() && f.category.trim() && f.unit.trim() && Number(f.weight) > 0 && f.price !== '' && f.max > f.reorder
+
+    const save = async () => {
+        setBusy(true)
+        setErr('')
+        try {
+            const { data: r } = await api.post('/products', {
+                sku: f.sku.trim().toUpperCase(),
+                name: f.name,
+                category: f.category,
+                unit: f.unit,
+                weight_kg: Number(f.weight),
+                price: Number(f.price),
+                qty: f.qty,
+                warehouse_reorder_point: f.whReorder,
+                reorder_point: f.reorder,
+                max_qty: f.max,
+            })
+            onDone({ ...r, name: f.name.trim() })
+        } catch (e) {
+            setErr(errMsg(e))
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    const unit = f.unit.trim() || 'ชิ้น'
+    const customUnit = !UNITS.includes(f.unit)
+    // ยังขาดอะไร (แสดงที่แถบล่าง แทนการปล่อยปุ่มเทาเฉย ๆ)
+    const missing = [
+        !f.sku.trim() && 'รหัส',
+        !f.name.trim() && 'ชื่อ',
+        !f.category.trim() && 'หมวด',
+        !(Number(f.weight) > 0) && 'น้ำหนัก',
+        f.price === '' && 'ราคา',
+    ].filter(Boolean)
+    // แถบช่วงสต็อกสาขา: 0 → จุดสั่ง (เหลือง) → สูงสุด (เขียว)
+    const scale = Math.max(f.max, f.reorder, 1) * 1.15
+    const lotValue = f.max * (Number(f.price) || 0)
+
+    return (
+        <Modal open={open} onClose={onClose} width={780}>
+            {/* หัว: ติดด้านบนตอนเลื่อน */}
+            <div className="sticky -top-6 z-10 -mx-6 -mt-6 mb-5 flex items-start justify-between gap-3 border-b border-[#f0f2ef] bg-white px-6 pt-6 pb-4">
+                <div className="flex items-center gap-3">
+                    <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand-ink"><PackagePlus size={20} /></span>
+                    <div>
+                        <div className="text-lg font-semibold">เพิ่มสินค้าใหม่</div>
+                        <div className="text-xs text-muted">เพิ่มเข้าคลังกลาง และเปิดให้ทุกสาขาสั่งได้ทันที</div>
+                    </div>
+                </div>
+                <button aria-label="ปิด" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-xl border border-line hover:bg-soft"><X size={18} /></button>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-[1.1fr_1fr]">
+                {/* ซ้าย: ข้อมูลสินค้า */}
+                <div className="flex flex-col gap-4">
+                    <div className="text-xs font-semibold tracking-wide text-faint">ข้อมูลสินค้า</div>
+                    <div className="grid grid-cols-[130px_1fr] gap-3">
+                        <Field label="รหัส (SKU)">
+                            <Input value={f.sku} onChange={set('sku')} maxLength={10} placeholder="0625" autoFocus className="uppercase" />
+                        </Field>
+                        <Field label="ชื่อสินค้า">
+                            <Input value={f.name} onChange={set('name')} maxLength={120} placeholder="เช่น โยเกิร์ตรสสตรอว์เบอร์รี" />
+                        </Field>
+                    </div>
+
+                    {/* หมวด: เลือกจาก dropdown · ตัวเลือกสุดท้ายเปลี่ยนเป็นช่องพิมพ์หมวดใหม่ */}
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-medium text-[#4a4f48]">หมวด</span>
+                        {newCat || categories.length === 0 ? (
+                            <div className="flex gap-2">
+                                <Input value={f.category} onChange={set('category')} maxLength={50} placeholder="พิมพ์ชื่อหมวดใหม่" autoFocus={newCat} />
+                                {categories.length > 0 && (
+                                    <Button variant="ghost" className="h-11 shrink-0" onClick={() => { setNewCat(false); set('category')('') }}>เลือกจากรายการ</Button>
+                                )}
+                            </div>
+                        ) : (
+                            <Select
+                                ariaLabel="หมวด"
+                                placeholder="เลือกหมวด"
+                                value={f.category}
+                                onChange={(v) => (v === NEW_CAT ? (setNewCat(true), set('category')('')) : set('category')(v))}
+                                options={[...categories.map((c) => [c, c]), { value: NEW_CAT, label: '+ เพิ่มหมวดใหม่' }]}
+                            />
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-medium text-[#4a4f48]">หน่วย</span>
+                        <div className="flex flex-wrap gap-1.5">
+                            {UNITS.map((u) => <Chip key={u} on={f.unit === u} onClick={() => set('unit')(u)}>{u}</Chip>)}
+                            <input
+                                value={customUnit ? f.unit : ''}
+                                onChange={set('unit')}
+                                maxLength={20}
+                                placeholder="อื่น ๆ"
+                                aria-label="หน่วยอื่น"
+                                className={`h-8 w-20 rounded-[10px] border px-2.5 text-[13px] outline-none placeholder:text-faint focus:border-ink/30 ${customUnit && f.unit ? 'border-ink font-semibold' : 'border-dashed border-[#cfd3cd]'}`}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="น้ำหนักต่อหน่วย" hint="ใช้คำนวณน้ำหนักบนรถ">
+                            <Input value={f.weight} onChange={setNum('weight', 3)} inputMode="decimal" placeholder="0.25" suffix="กก." />
+                        </Field>
+                        <Field label="ราคาต่อหน่วย" hint="ใช้คำนวณมูลค่า">
+                            <Input value={f.price} onChange={setNum('price', 2)} inputMode="decimal" placeholder="15" suffix="บาท" />
+                        </Field>
+                    </div>
+                </div>
+
+                {/* ขวา: ตั้งค่าสต็อก */}
+                <div className="flex flex-col gap-3">
+                    <div className="text-xs font-semibold tracking-wide text-faint">ตั้งค่าสต็อก</div>
+                    <Group icon={WarehouseIcon} title="คลังกลาง">
+                        <StepRow label="จำนวนเริ่มต้น" sub={`${unit}ที่มีในคลังตอนนี้`} value={f.qty} onChange={set('qty')} />
+                        <StepRow label="จุดสั่งซื้อเข้าคลัง" sub="ต่ำกว่านี้ขึ้นเตือนให้สั่งซื้อ" value={f.whReorder} onChange={set('whReorder')} />
+                    </Group>
+                    <Group icon={Store} title="ทุกสาขา">
+                        <StepRow label="จุดสั่ง" sub="ต่ำกว่านี้ระบบร่างคำขอให้" value={f.reorder} onChange={set('reorder')} />
+                        <StepRow label="สูงสุด" sub="เติมให้ถึงจำนวนนี้" value={f.max} min={1} onChange={set('max')} />
+                        {/* ช่วงสต็อกสาขาแบบภาพ */}
+                        <div className="pt-1 pb-3">
+                            <div className="relative h-2 rounded-full bg-[#eef0ed]">
+                                <div className="absolute inset-y-0 left-0 rounded-full bg-warn/70 transition-[width] duration-300" style={{ width: `${(100 * Math.min(f.reorder, f.max)) / scale}%` }} />
+                                <div className="absolute inset-y-0 rounded-full bg-brand transition-all duration-300" style={{ left: `${(100 * f.reorder) / scale}%`, width: `${(100 * Math.max(f.max - f.reorder, 0)) / scale}%` }} />
+                            </div>
+                            <div className="mt-1.5 flex justify-between text-[11px] text-muted">
+                                <span><i className="mr-1 inline-block size-2 rounded-full bg-warn/70" />ร่างคำขอเมื่อ ≤ {f.reorder}</span>
+                                <span><i className="mr-1 inline-block size-2 rounded-full bg-brand" />เติมถึง {f.max}</span>
+                            </div>
+                            {f.max <= f.reorder && <div className="mt-1.5 text-xs text-danger-ink">สูงสุดต้องมากกว่าจุดสั่ง</div>}
+                        </div>
+                    </Group>
+
+                    {/* ผลที่จะเกิดหลังบันทึก */}
+                    <div className="flex gap-3 rounded-2xl bg-brand-soft/60 px-4 py-3 text-[13px] text-brand-ink">
+                        <Sparkles size={16} className="mt-0.5 shrink-0" />
+                        <span>
+                            หลังบันทึก ระบบร่างคำขอล็อตแรกให้ทุกสาขา สาขาละ <b>{num(f.max)} {unit}</b>
+                            {lotValue > 0 && <> (≈ {baht(lotValue)})</>} รอสาขายืนยันแล้วอนุมัติตามปกติ
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* แถบล่าง: ติดด้านล่างตอนเลื่อน */}
+            <div className="sticky -bottom-6 z-10 -mx-6 mt-6 -mb-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#f0f2ef] bg-white px-6 py-4">
+                <div className="min-w-0 flex-1 text-xs">
+                    {err ? <span className="text-danger-ink">{err}</span> : missing.length ? <span className="text-muted">ยังขาด: {missing.join(' · ')}</span> : <span className="font-semibold text-brand-ink">ข้อมูลครบ พร้อมบันทึก</span>}
+                </div>
+                <div className="flex gap-2.5">
+                    <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+                    <Button disabled={!ready} loading={busy} onClick={save}>บันทึกสินค้า</Button>
+                </div>
             </div>
         </Modal>
     )

@@ -15,8 +15,9 @@ const AUTO_SUBMIT_MINUTES = Number(process.env.AUTO_SUBMIT_MINUTES || 120)
  *    แต่ถ้าของหมด (qty <= 0) จะยกระดับคำขอเดิมเป็น "ด่วน"
  *  - จำนวนที่แนะนำ = max_qty − qty (ไม่มีของกำลังมา เพราะเช็กคำขอเปิดแล้ว)
  *  - รวมเข้าร่างเดิมของสาขาถ้ามี ไม่อย่างนั้นสร้างร่างใหม่
+ *  - launch = สินค้าใหม่ที่เพิ่งเพิ่ม: สาขาเริ่มที่ 0 เป็นเรื่องปกติ ไม่นับเป็นด่วนและไม่แจ้ง Admin ว่าของหมด
  */
-const checkLowStock = async (conn, branchId, productIds) => {
+const checkLowStock = async (conn, branchId, productIds, { launch = false } = {}) => {
     if (!productIds.length) return null
 
     const low = await query(
@@ -53,7 +54,7 @@ const checkLowStock = async (conn, branchId, productIds) => {
         .filter((l) => l.suggested > 0)
     if (!toAdd.length) return null
 
-    const urgent = toAdd.some((l) => l.qty <= 0)
+    const urgent = !launch && toAdd.some((l) => l.qty <= 0)
     let draft = await one(
         "SELECT id, code, priority FROM replenish_request WHERE branch_id = ? AND status = 'draft' ORDER BY id DESC LIMIT 1 FOR UPDATE",
         [branchId],
@@ -79,7 +80,7 @@ const checkLowStock = async (conn, branchId, productIds) => {
     )
 
     const names = toAdd.map((l) => l.name).join(', ')
-    await notify({ role: 'branch', branchId }, 'auto_draft', `ระบบร่างคำขอ ${draft.code}: ${names} · ยืนยันภายใน ${AUTO_SUBMIT_MINUTES} นาที`, `/branch/requests/${draft.id}`, conn)
+    await notify({ role: 'branch', branchId }, 'auto_draft', `ระบบร่างคำขอ ${draft.code}: ${launch ? 'สินค้าใหม่ล็อตแรก ' : ''}${names} · ยืนยันภายใน ${AUTO_SUBMIT_MINUTES} นาที`, `/branch/requests/${draft.id}`, conn)
     if (urgent) {
         const b = await one('SELECT name FROM branch WHERE id = ?', [branchId], conn)
         await notify({ role: 'admin' }, 'stock_out', `สาขา${b.name}: ${toAdd.filter((l) => l.qty <= 0).map((l) => l.name).join(', ')} หมดแล้ว`, `/admin/requests/${draft.id}`, conn)
