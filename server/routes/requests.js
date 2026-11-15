@@ -174,6 +174,9 @@ router.post('/requests/:id/approve', authCheck, requireRole('admin'), handle(asy
     const result = await transaction(async (conn) => {
         const r = await loadRequest(Number(req.params.id), req.user, conn, true)
         if (r.status !== 'pending') fail(409, 'อนุมัติได้เฉพาะคำขอที่รออนุมัติ')
+        // ล็อกแถวสาขาแบบอ่านร่วม: ถ้า Admin อีกคนกำลังปิดสาขานี้ จะรอจนปิดเสร็จแล้วเห็นว่าปิดแล้ว (กันปิดสาขาทั้งที่มีของเพิ่งอนุมัติ)
+        const br = await one('SELECT active FROM branch WHERE id = ? LOCK IN SHARE MODE', [r.branch_id], conn)
+        if (!br?.active) fail(409, 'สาขานี้ปิดแล้ว')
         const items = await query('SELECT product_id, qty_requested FROM request_item WHERE request_id = ?', [r.id], conn)
         const override = req.body?.items ? parseItems(req.body.items, 'qty_approved', true) : new Map()
         for (const pid of override.keys()) if (!items.some((i) => i.product_id === pid)) fail(400, `สินค้า #${pid} ไม่อยู่ในคำขอนี้`)

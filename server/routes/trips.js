@@ -67,7 +67,8 @@ router.post('/trips', authCheck, requireRole('admin'), handle(async (req, res) =
         if (!driver) fail(400, 'ไม่พบคนขับ')
         const vehicle = await one('SELECT * FROM vehicle WHERE id = ? FOR UPDATE', [vehicleId], conn)
         if (!vehicle || ['maintenance', 'retired'].includes(vehicle.status)) fail(400, 'รถคันนี้ใช้งานไม่ได้ (ส่งซ่อมหรือเลิกใช้)')
-        const busy = await one('SELECT code FROM trip WHERE vehicle_id = ? AND status IN (?) LIMIT 1', [vehicleId, ACTIVE], conn)
+        // FOR UPDATE = อ่านข้อมูลล่าสุด (ไม่ใช่ snapshot ตอนเริ่ม transaction) กัน Admin สองคนจัดรถคันเดียวกันพร้อมกัน
+        const busy = await one('SELECT code FROM trip WHERE vehicle_id = ? AND status IN (?) LIMIT 1 FOR UPDATE', [vehicleId, ACTIVE], conn)
         if (busy) fail(409, `รถ ${vehicle.plate} ติดงาน ${busy.code} อยู่`)
 
         const reqs = await query(

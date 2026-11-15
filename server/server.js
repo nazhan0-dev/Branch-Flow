@@ -4,6 +4,14 @@ if (!process.env.SECRET) {
     console.error('ต้องตั้ง SECRET ใน .env (ข้อความสุ่มยาว ๆ สำหรับเซ็น JWT)')
     process.exit(1)
 }
+// ขึ้นระบบจริง: ห้ามใช้ SECRET ตัวอย่างหรือสั้นเกินไป (ใครรู้ SECRET ปลอม token เป็นใครก็ได้)
+if (process.env.NODE_ENV === 'production') {
+    if (process.env.SECRET.length < 32 || /change-me/.test(process.env.SECRET)) {
+        console.error('production: SECRET ต้องเป็นข้อความสุ่มอย่างน้อย 32 ตัวอักษร (ห้ามใช้ค่าตัวอย่าง)')
+        process.exit(1)
+    }
+    if (process.env.POS_API_KEY === 'pos-demo-key') console.warn('production: POS_API_KEY ยังเป็นค่าตัวอย่าง ควรเปลี่ยน')
+}
 try {
     require('./middlewares/auth').cookieOptions()
 } catch (err) {
@@ -49,6 +57,8 @@ app.use('/api', (req, res) => res.status(404).json({ message: 'ไม่พบ A
 
 // error กลาง: error ที่ตั้งใจ (HttpError) ส่งข้อความกลับ ส่วน error อื่นซ่อนรายละเอียด
 app.use((err, req, res, next) => {
+    // ค่าซ้ำกับ UNIQUE ในฐานข้อมูล (เช่น สร้างพร้อมกันสองครั้งจนผ่านการเช็คก่อนบันทึก) = 409 ไม่ใช่ 500
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'ข้อมูลนี้มีอยู่แล้ว (ซ้ำ) ลองโหลดหน้าใหม่' })
     const status = err.status || 500
     if (status >= 500) console.error(err)
     res.status(status).json({ message: status >= 500 ? 'Server Error' : err.message, ...(err.details ? { details: err.details } : {}) })
