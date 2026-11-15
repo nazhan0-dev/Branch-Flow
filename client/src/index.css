@@ -101,6 +101,27 @@ body { background: var(--color-canvas); color: var(--color-ink); }
     from { stroke-dashoffset: 24; }
     to { stroke-dashoffset: 0; }
 }
+/* หน้าเข้าสู่ระบบ: เส้นประวิ่งตามเส้นทาง · จุดสาขาเด้งขึ้นทีละจุด · วงกลมพื้นหลังลอยช้า ๆ · ฟอร์มสั่นเมื่อรหัสผิด */
+@keyframes bl-dash { to { stroke-dashoffset: -28; } }
+.bl-dash { animation: bl-dash 1.2s linear infinite, bl-fade 0.6s ease backwards; animation-delay: 0s, var(--d, 0ms); }
+@keyframes bl-dot-pop {
+    0% { transform: scale(0); }
+    65% { transform: scale(1.25); }
+    100% { transform: scale(1); }
+}
+.bl-dot-pop { transform-box: fill-box; transform-origin: center; animation: bl-dot-pop 0.5s var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
+@keyframes bl-float {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(14px, -18px); }
+}
+.bl-float { animation: bl-float 9s ease-in-out infinite; }
+.bl-float-slow { animation: bl-float 13s ease-in-out infinite reverse; }
+@keyframes bl-shake {
+    0%, 100% { transform: none; }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+}
+.bl-shake { animation: bl-shake 0.4s ease; }
 .bl-rise { animation: bl-fade-up 0.5s var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
 .bl-seg { transform-origin: left; animation: bl-grow-x 0.6s var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
 .bl-check-pop { animation: bl-check-pop 0.55s var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
