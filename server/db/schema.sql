@@ -28,6 +28,7 @@ CREATE TABLE user (
   role ENUM('branch','admin','driver','executive') NOT NULL,
   branch_id INT NULL,               -- ใช้เฉพาะ role = branch
   enabled TINYINT(1) NOT NULL DEFAULT 1,
+  default_vehicle_id INT NULL,      -- รถประจำของคนขับ (FK ใส่หลังสร้างตาราง vehicle)
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   FOREIGN KEY (branch_id) REFERENCES branch(id)
 ) ENGINE=InnoDB;
@@ -130,8 +131,9 @@ CREATE TABLE vehicle (
   plate VARCHAR(20) NOT NULL UNIQUE,
   type VARCHAR(30) NOT NULL,
   capacity_kg INT NOT NULL,
-  status ENUM('available','in_use','maintenance') NOT NULL DEFAULT 'available'
+  status ENUM('available','in_use','maintenance','retired') NOT NULL DEFAULT 'available'
 ) ENGINE=InnoDB;
+ALTER TABLE user ADD CONSTRAINT fk_user_vehicle FOREIGN KEY (default_vehicle_id) REFERENCES vehicle(id);
 
 -- เที่ยวส่ง: assigned → accepted → on_route → completed (หรือ cancelled)
 CREATE TABLE trip (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, ClipboardList, FileText, Home, Layers, LayoutPanelLeft, LogOut, Map, Monitor, Package, Store, Truck, User, Clock } from 'lucide-react'
+import { BarChart3, Car, ClipboardList, FileText, Home, Layers, LayoutPanelLeft, LogOut, Map, Monitor, Package, Store, Truck, User, Clock } from 'lucide-react'
 import { useAuth } from '../store/auth'
 import { disconnectSocket } from '../lib/socket'
 import NotificationBell from './NotificationBell'
@@ -19,6 +19,7 @@ const MENUS = {
         { to: '/admin/trips', label: 'แผนที่ติดตามรถ', short: 'แผนที่', icon: Map },
         { to: '/admin/requests', label: 'คำขอเติมสินค้า', short: 'คำขอ', icon: LayoutPanelLeft },
         { to: '/admin/planner', label: 'จัดเที่ยวส่ง', short: 'จัดเที่ยว', icon: Truck },
+        { to: '/admin/fleet', label: 'รถและคนขับ', short: 'รถ', icon: Car },
         { to: '/admin/warehouse', label: 'สต็อกคลังกลาง', short: 'คลัง', icon: Package },
         { to: '/admin/branches', label: 'สาขา', icon: Store },
         { to: '/admin/overview', label: 'ภาพรวม', icon: BarChart3 },

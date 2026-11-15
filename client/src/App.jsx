@@ -17,6 +17,7 @@ import AdminRequests from './pages/admin/Requests'
 import Warehouse from './pages/admin/Warehouse'
 import Planner from './pages/admin/Planner'
 import LiveMap from './pages/admin/LiveMap'
+import Fleet from './pages/admin/Fleet'
 import DriverJobs, { DriverHistory, DriverMap, DriverProfile } from './pages/driver/Jobs'
 import DriverTrip from './pages/driver/Trip'
 import Overview from './pages/exec/Overview'
@@ -104,6 +105,7 @@ export default function App() {
             <Route path="/admin/planner" element={<Guard roles={A}><Planner /></Guard>} />
             <Route path="/admin/trips" element={<Guard roles={A}><LiveMap /></Guard>} />
             <Route path="/admin/trips/:id" element={<Guard roles={A}><LiveMap /></Guard>} />
+            <Route path="/admin/fleet" element={<Guard roles={A}><Fleet /></Guard>} />
             <Route path="/admin/overview" element={<Guard roles={A}><Overview /></Guard>} />
             <Route path="/admin/branches" element={<Guard roles={A}><Branches viewer="admin" /></Guard>} />
             <Route path="/admin/branches/:id" element={<Guard roles={A}><Branches viewer="admin" /></Guard>} />

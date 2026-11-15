@@ -44,7 +44,8 @@ export default function Planner() {
 
     const plan = useMemo(() => (origin && chosen.length ? estimateEtas(origin, chosen) : null), [origin, chosen])
     const kg = chosen.reduce((s, r) => s + Number(r.weightTon || 0) * 1000, 0)
-    const freeVehicles = (vehicles.data || []).filter((v) => v.status === 'available')
+    // รถว่าง = ไม่ซ่อม และไม่ติดเที่ยวที่ยังไม่จบ (มอบงานแล้วแต่ยังไม่ออกก็นับว่าไม่ว่าง)
+    const freeVehicles = (vehicles.data || []).filter((v) => v.status === 'available' && !Number(v.busy))
     const vehicle = (vehicles.data || []).find((v) => v.id === vehicleId)
     const freeDrivers = (drivers.data || []).filter((d) => !Number(d.onRoute))
     const mapTrip = useMemo(
@@ -66,9 +67,18 @@ export default function Planner() {
         setStops(next)
         setDrag(null)
     }
-    // เลือกรถที่บรรทุกได้พอคันเล็กสุดให้อัตโนมัติ
-    const vId = vehicleId ?? [...freeVehicles].sort((a, b) => a.capacityKg - b.capacityKg).find((v) => v.capacityKg >= kg)?.id ?? null
     const dId = driverId ?? freeDrivers[0]?.id ?? null
+    // รถประจำของคนขับที่เลือก ใช้ได้ถ้าว่างและบรรทุกพอ
+    const fits = (id) => freeVehicles.some((v) => v.id === id && v.capacityKg >= kg)
+    const regular = (drivers.data || []).find((d) => d.id === dId)?.defaultVehicleId
+    // เลือกรถให้อัตโนมัติ: รถประจำก่อน ถ้าใช้ไม่ได้ เลือกคันเล็กสุดที่บรรทุกพอ
+    const vId = vehicleId ?? (fits(regular) ? regular : null) ?? [...freeVehicles].sort((a, b) => a.capacityKg - b.capacityKg).find((v) => v.capacityKg >= kg)?.id ?? null
+    const pickDriver = (d) => {
+        setDriverId(d.id)
+        // เปลี่ยนคนขับ → ใช้รถประจำของคนนั้นถ้าว่าง ไม่อย่างนั้นปล่อยให้ระบบเลือกให้
+        setVehicleId(fits(d.defaultVehicleId) ? d.defaultVehicleId : null)
+    }
+    const plateOf = (id) => (vehicles.data || []).find((v) => v.id === id)?.plate
     const cap = (vehicle || freeVehicles.find((v) => v.id === vId))?.capacityKg || 0
 
     const create = async () => {
@@ -172,10 +182,10 @@ export default function Planner() {
                         <Choice
                             key={d.id}
                             on={dId === d.id}
-                            onClick={() => setDriverId(d.id)}
+                            onClick={() => pickDriver(d)}
                             avatar={d.name}
                             title={d.name}
-                            sub={Number(d.onRoute) ? 'กำลังวิ่งอีกเที่ยว' : Number(d.queued) ? `มีงานรอ ${d.queued} เที่ยว` : 'ว่าง'}
+                            sub={`${Number(d.onRoute) ? 'กำลังวิ่งอีกเที่ยว' : Number(d.queued) ? `มีงานรอ ${d.queued} เที่ยว` : 'ว่าง'}${d.defaultVehicleId ? ` · รถประจำ ${plateOf(d.defaultVehicleId) ?? '–'}` : ''}`}
                         />
                     ))}
 

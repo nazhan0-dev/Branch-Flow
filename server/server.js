@@ -42,7 +42,7 @@ app.use((req, res, next) => {
 })
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
-for (const name of ['auth', 'branches', 'requests', 'trips', 'warehouse', 'dashboard']) {
+for (const name of ['auth', 'branches', 'requests', 'trips', 'warehouse', 'dashboard', 'fleet']) {
     app.use('/api', require(`./routes/${name}`))
 }
 app.use('/api', (req, res) => res.status(404).json({ message: 'ไม่พบ API นี้' }))
@@ -79,8 +79,14 @@ io.on('connection', (socket) => {
 setIO(io)
 
 if (require.main === module) {
-    server.listen(PORT, () => console.log(`API + Socket.io running on http://localhost:${PORT}`))
-    startJobs()
+    // ปรับโครงสร้างฐานข้อมูลให้ทันโค้ดก่อนเปิดรับ request (ข้อมูลเดิมไม่หาย)
+    require('./services/migrate')
+        .migrate()
+        .catch((err) => console.error('[migrate] ไม่สำเร็จ:', err.message))
+        .finally(() => {
+            server.listen(PORT, () => console.log(`API + Socket.io running on http://localhost:${PORT}`))
+            startJobs()
+        })
 }
 
 module.exports = { app, server }

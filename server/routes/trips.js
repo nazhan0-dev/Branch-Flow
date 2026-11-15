@@ -31,12 +31,18 @@ const branchRoomsOfTrip = async (tripId, conn) =>
     )).map((b) => `branch:${b.branch_id}`)
 
 router.get('/vehicles', authCheck, requireRole('admin', 'executive'), handle(async (req, res) => {
-    res.json(await query('SELECT id, plate, type, capacity_kg AS capacityKg, status FROM vehicle ORDER BY capacity_kg DESC'))
+    // busy = มีเที่ยวที่ยังไม่จบ (มอบงานแล้วแต่ยังไม่ออก ก็นับว่าไม่ว่าง กันจัดรถคันเดียวซ้ำสองเที่ยว)
+    res.json(await query(
+        `SELECT v.id, v.plate, v.type, v.capacity_kg AS capacityKg, v.status,
+                EXISTS (SELECT 1 FROM trip t WHERE t.vehicle_id = v.id AND t.status IN (?)) AS busy
+         FROM vehicle v WHERE v.status <> 'retired' ORDER BY v.capacity_kg DESC`,
+        [ACTIVE]
+    ))
 }))
 
 router.get('/drivers', authCheck, requireRole('admin', 'executive'), handle(async (req, res) => {
     res.json(await query(
-        `SELECT u.id, u.name, u.phone,
+        `SELECT u.id, u.name, u.phone, u.default_vehicle_id AS defaultVehicleId,
                 SUM(t.status = 'on_route') AS onRoute, SUM(t.status IN ('assigned','accepted')) AS queued
          FROM user u LEFT JOIN trip t ON t.driver_id = u.id AND t.status IN (?)
          WHERE u.role = 'driver' AND u.enabled = 1 GROUP BY u.id ORDER BY onRoute, queued, u.name`,
@@ -60,7 +66,9 @@ router.post('/trips', authCheck, requireRole('admin'), handle(async (req, res) =
         const driver = await one("SELECT id, name FROM user WHERE id = ? AND role = 'driver' AND enabled = 1", [driverId], conn)
         if (!driver) fail(400, 'ไม่พบคนขับ')
         const vehicle = await one('SELECT * FROM vehicle WHERE id = ? FOR UPDATE', [vehicleId], conn)
-        if (!vehicle || vehicle.status === 'maintenance') fail(400, 'รถคันนี้ใช้งานไม่ได้')
+        if (!vehicle || ['maintenance', 'retired'].includes(vehicle.status)) fail(400, 'รถคันนี้ใช้งานไม่ได้ (ส่งซ่อมหรือเลิกใช้)')
+        const busy = await one('SELECT code FROM trip WHERE vehicle_id = ? AND status IN (?) LIMIT 1', [vehicleId, ACTIVE], conn)
+        if (busy) fail(409, `รถ ${vehicle.plate} ติดงาน ${busy.code} อยู่`)
 
         const reqs = await query(
             `SELECT r.id, r.code, r.status, r.branch_id, ts.id AS stopId,

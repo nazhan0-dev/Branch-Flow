@@ -127,6 +127,11 @@ async function main() {
     const hash = await bcrypt.hash(PASSWORD, 10)
     await c.query('INSERT INTO user (email, password, name, role, branch_id, phone) VALUES ?', [USERS.map(([e, n, r, b, ph]) => [e, hash, n, r, b ? bid[b] : null, ph])])
     await c.query('INSERT INTO vehicle (plate, type, capacity_kg) VALUES ?', [VEHICLES])
+    // รถประจำ: คนขับคนที่ 1 → รถคันที่ 1, คนที่ 2 → คันที่ 2 ...
+    const drivers = USERS.filter((u) => u[2] === 'driver')
+    for (const [i, [email]] of drivers.entries()) {
+        if (VEHICLES[i]) await c.query('UPDATE user SET default_vehicle_id = (SELECT id FROM vehicle WHERE plate = ?) WHERE email = ?', [VEHICLES[i][0], email])
+    }
 
     // ยอดขายย้อนหลัง 30 วันให้กราฟใน Dashboard (เป็นประวัติอย่างเดียว ไม่แตะสต็อกที่ตั้งไว้ข้างบน)
     await c.query("SET time_zone = '+00:00'")

@@ -88,7 +88,7 @@ router.get('/dashboard/overview', authCheck, requireRole('admin', 'executive'), 
              WHERE b.is_warehouse = 0 GROUP BY b.region ORDER BY branches DESC, b.region`,
             [from]
         ),
-        query('SELECT status, COUNT(*) AS n FROM vehicle GROUP BY status'),
+        query("SELECT status, COUNT(*) AS n FROM vehicle WHERE status <> 'retired' GROUP BY status"),
     ])
     res.json({ days, kpi: { ...cur, ...live }, prev, requestsToday: byStatus, frequentOut, dailyTrips: daily, regions, vehicles })
 }))
