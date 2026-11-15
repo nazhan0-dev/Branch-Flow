@@ -27,15 +27,17 @@ const cookieOptions = () => {
 
 const sign = (user) => jwt.sign({ id: user.id }, process.env.SECRET, { expiresIn: MAX_AGE_MS / 1000 })
 
-// อ่าน token → โหลดผู้ใช้จากฐานข้อมูลทุกครั้ง (บัญชีที่ถูกระงับ หรือสาขาที่ปิดแล้ว ใช้ไม่ได้ทันที)
+// อ่าน token → โหลดผู้ใช้จากฐานข้อมูลทุกครั้ง (บัญชีที่ถูกระงับ, สาขาที่ปิดแล้ว หรือถูกตั้งรหัสใหม่ ใช้ไม่ได้ทันที)
 const loadUser = async (token) => {
     if (!token) return null
     try {
-        const { id } = jwt.verify(token, process.env.SECRET)
+        const { id, iat } = jwt.verify(token, process.env.SECRET)
+        // password_changed = เวลาที่ Admin ตั้งรหัสใหม่ (วินาที) token ที่ออกก่อนหน้านั้นใช้ไม่ได้ (เตะเครื่องที่ล็อกอินด้วยรหัสเก่าออก)
         return await one(
             `SELECT u.id, u.email, u.name, u.role, u.branch_id AS branchId FROM user u LEFT JOIN branch b ON b.id = u.branch_id
-             WHERE u.id = ? AND u.enabled = 1 AND (u.branch_id IS NULL OR b.active = 1)`,
-            [id]
+             WHERE u.id = ? AND u.enabled = 1 AND (u.branch_id IS NULL OR b.active = 1)
+               AND (u.password_changed IS NULL OR u.password_changed <= ?)`,
+            [id, iat]
         )
     } catch {
         return null

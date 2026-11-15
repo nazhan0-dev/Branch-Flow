@@ -7,6 +7,7 @@ const { query, one } = require('../config/db')
  * - replenish_request.status เพิ่ม 'cancelled' (ยกเลิก)
  * - branch.active = เปิด/ปิดสาขา
  * - product.branch_reorder_point / branch_max_qty = ค่ามาตรฐานของสาขา (เติมจากค่าเฉลี่ยของสาขาที่มีอยู่)
+ * - user.password_changed = เวลาที่ตั้งรหัสใหม่ล่าสุด (unix วินาที) ใช้ยกเลิก session เก่า
  */
 const migrate = async () => {
     const st = await one("SELECT COLUMN_TYPE AS t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicle' AND COLUMN_NAME = 'status'")
@@ -30,6 +31,11 @@ const migrate = async () => {
         await query(`UPDATE product p JOIN (SELECT product_id, ROUND(AVG(reorder_point)) AS rp, ROUND(AVG(max_qty)) AS mx FROM branch_stock GROUP BY product_id) a ON a.product_id = p.id
              SET p.branch_reorder_point = a.rp, p.branch_max_qty = GREATEST(a.mx, a.rp + 1)`)
         console.log('[migrate] product.branch_reorder_point / branch_max_qty')
+    }
+    const pc = await one("SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'password_changed'")
+    if (!Number(pc.n)) {
+        await query('ALTER TABLE user ADD COLUMN password_changed INT UNSIGNED NULL')
+        console.log('[migrate] user.password_changed')
     }
     const col = await one("SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'default_vehicle_id'")
     if (!Number(col.n)) {

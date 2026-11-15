@@ -29,6 +29,7 @@ CREATE TABLE user (
   role ENUM('branch','admin','driver','executive') NOT NULL,
   branch_id INT NULL,               -- ใช้เฉพาะ role = branch
   enabled TINYINT(1) NOT NULL DEFAULT 1,
+  password_changed INT UNSIGNED NULL, -- เวลาที่ตั้งรหัสใหม่ล่าสุด (unix วินาที) token ที่ออกก่อนหน้านี้ใช้ไม่ได้
   default_vehicle_id INT NULL,      -- รถประจำของคนขับ (FK ใส่หลังสร้างตาราง vehicle)
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   FOREIGN KEY (branch_id) REFERENCES branch(id)
