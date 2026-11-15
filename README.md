@@ -24,15 +24,15 @@ branch-logistics/
 ├── client/                 React (Vite)
 │   └── src/
 │       ├── api/            axios instance
-│       ├── components/     Layout, TripMap, NotificationBell, ui
+│       ├── components/     Layout, TripMap, NotificationBell, ui, accounts (ฟอร์มบัญชีที่ใช้ร่วมกัน)
 │       ├── lib/            socket, useApi, format
 │       ├── store/          auth (Zustand)
 │       └── pages/          branch / admin / driver / exec
 └── server/                 Express API
-    ├── config/             db pool, error helpers
+    ├── config/             db pool, error helpers, validate (ตรวจข้อมูลฟอร์ม)
     ├── middlewares/        auth (JWT cookie, role, branch scope)
     ├── routes/             auth, branches, branchAdmin, requests, trips, warehouse, dashboard, fleet
-    ├── services/           replenish (ร่างคำขออัตโนมัติ), geo (ETA), notify, realtime, migrate
+    ├── services/           replenish (ร่างคำขออัตโนมัติ), geo (ETA), notify, realtime, migrate, loginLimit
     ├── jobs/               งานตั้งเวลา (ส่งร่างอัตโนมัติ, สแกนสต็อก)
     └── db/                 schema.sql, reset.js (seed), flow-test.js, pos-sim.js
 ```
@@ -176,6 +176,8 @@ npm run db:reset && npm run test:flow
 - **ยกเลิก:** สาขายกเลิกคำขอที่ยังไม่อนุมัติได้, Admin ยกเลิกคำขอที่อนุมัติแล้ว (คืนยอดจองเข้าคลัง) และยกเลิกเที่ยวที่รถยังไม่ออก (คำขอกลับไปรอจัดรถ) ต้องใส่เหตุผลทุกครั้ง
 - **ปิดสาขา / ปิดบัญชี:** ไม่ลบข้อมูล (ประวัติยังอยู่) ล็อกอินไม่ได้ทันทีแม้ session เดิม, ปิดสาขาไม่ได้ถ้ายังมีของอนุมัติแล้วหรือกำลังส่งไป, รถ/คนขับที่ติดงานส่งซ่อมหรือปิดบัญชีไม่ได้
 - **สาขาใหม่ / สินค้าใหม่:** สต็อกเริ่มที่ 0 ระบบร่างคำขอล็อตแรกให้ (ไม่นับเป็นด่วน) จุดสั่ง/สูงสุดของสาขาใหม่ใช้ค่ามาตรฐานที่ตั้งไว้ตอนเพิ่มสินค้า
+- **กันกดซ้ำ / ทำพร้อมกัน:** ทุกขั้นที่แตะสต็อก (POS, อนุมัติ, ออกเดินทาง, รับของ, ยกเลิก) ล็อกแถวใน transaction แล้วตรวจสถานะก่อนทำ กดซ้ำหรือส่งซ้ำพร้อมกันก็ตัด/เพิ่มสต็อกครั้งเดียว และจัดรถคันเดียวกันให้ 2 เที่ยวพร้อมกันไม่ได้
+- **ล็อกอิน:** token (JWT) อยู่ใน cookie แบบ `httpOnly` + `SameSite=Lax` (`Secure` เมื่อ production), อายุ 12 ชม., ล็อกอินผิดเกิน 5 ครั้ง/อีเมล หรือ 30 ครั้ง/IP ใน 15 นาที ถูกบล็อกชั่วคราว, Admin ตั้งรหัสใหม่ให้ใคร เครื่องที่ล็อกอินด้วยรหัสเก่าของคนนั้นถูกออกทันที, production ไม่ยอมเปิดถ้า `SECRET` สั้นกว่า 32 ตัวหรือเป็นค่าตัวอย่าง
 - **สิทธิ์:** สาขาเห็นเฉพาะข้อมูลสาขาตัวเอง (ตรวจฝั่ง server), Socket.io แยกห้อง `ops` / `branch:<id>` / `driver:<id>` สาขาจึงไม่เห็นพิกัดรถที่ไม่ได้มาสาขาตัวเอง
 
 ## หมายเหตุ
