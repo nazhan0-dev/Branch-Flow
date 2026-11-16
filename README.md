@@ -72,17 +72,19 @@ npm run dev                 # http://localhost:5173
 
 ## บัญชีทดลอง
 
-รหัสผ่านทุกบัญชี: `Demo@1234`
+บัญชีจาก `npm run db:empty` รหัสผ่าน `Demo@1234` ทุกบัญชี
 
-| บทบาท | `db:reset` (ข้อมูลเต็ม) | `db:empty` (เริ่มใหม่) |
-|---|---|---|
-| คลังกลาง (Admin) | admin@bl.test | admin@bl.test |
-| ผู้บริหาร | exec@bl.test | exec@bl.test |
-| พนักงานสาขา | ramintra@bl.test (รามอินทรา) | bangna@bl.test (บางนา), bangbon@bl.test (บางบอน) |
-| คนขับ | somchai@bl.test (สมชาย) | ris@bl.test (ริส), rif@bl.test (ริฟ) |
+| บทบาท | ชื่อ | อีเมล | รหัสผ่าน |
+|---|---|---|---|
+| คลังกลาง (Admin) | อรทัย คลังกลาง | admin@bl.test | Demo@1234 |
+| ผู้บริหาร | อา ผู้บริหาร | exec@bl.test | Demo@1234 |
+| พนักงานสาขา | สาขาบางนา | bangna@bl.test | Demo@1234 |
+| พนักงานสาขา | สาขาบางบอน | bangbon@bl.test | Demo@1234 |
+| คนขับ | ริส | ris@bl.test | Demo@1234 |
+| คนขับ | ริฟ | rif@bl.test | Demo@1234 |
 
-`db:reset` มีบัญชีเพิ่มอีก: สาขา latkrabang@bl.test, minburi@bl.test และคนขับ wichai@bl.test, napa@bl.test
-บัญชีที่ Admin สร้างจากหน้าเว็บ ระบบสุ่มรหัสผ่านชั่วคราวให้และแสดงครั้งเดียว
+ถ้าใช้ข้อมูลตัวอย่างเต็ม (`npm run db:reset`) บัญชี Admin และผู้บริหารเหมือนเดิม ส่วนสาขาใช้ ramintra@bl.test และคนขับใช้ somchai@bl.test (รหัสเดียวกัน)
+บัญชีที่ Admin สร้างเพิ่มจากหน้าเว็บ ระบบสุ่มรหัสผ่านชั่วคราวให้และแสดงครั้งเดียว
 
 ### เริ่มใหม่ (`npm run db:empty`)
 

@@ -52,7 +52,7 @@ const LEVELS = [0.9, 0.7, 0.55, 0.8, 0.45, 0.65, 0.75, 0.6, 0.5, 0.85]
 
 const USERS = [
     ['admin@bl.test', 'อรทัย คลังกลาง', 'admin', null, '081-000-0001'],
-    ['exec@bl.test', 'วิภา ผู้บริหาร', 'executive', null, '081-000-0002'],
+    ['exec@bl.test', 'อา ผู้บริหาร', 'executive', null, '081-000-0002'],
     ['ramintra@bl.test', 'สุดา สาขารามอินทรา', 'branch', 'B0218', '081-000-0101'],
     ['latkrabang@bl.test', 'ปรีชา สาขาลาดกระบัง', 'branch', 'B0252', '081-000-0102'],
     ['minburi@bl.test', 'กมล สาขามีนบุรี', 'branch', 'B0231', '081-000-0103'],
