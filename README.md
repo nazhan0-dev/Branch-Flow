@@ -34,7 +34,7 @@ branch-logistics/
     ├── routes/             auth, branches, branchAdmin, requests, trips, warehouse, dashboard, fleet
     ├── services/           replenish (ร่างคำขออัตโนมัติ), geo (ETA), notify, realtime, migrate, loginLimit
     ├── jobs/               งานตั้งเวลา (ส่งร่างอัตโนมัติ, สแกนสต็อก)
-    └── db/                 schema.sql, reset.js (seed), flow-test.js, pos-sim.js
+    └── db/                 schema.sql (โครงสร้าง ดูหัวข้อ "ฐานข้อมูล"), reset.js (seed), flow-test.js, pos-sim.js
 ```
 
 ## ติดตั้งและรัน
@@ -179,6 +179,113 @@ npm run db:reset && npm run test:flow
 - **กันกดซ้ำ / ทำพร้อมกัน:** ทุกขั้นที่แตะสต็อก (POS, อนุมัติ, ออกเดินทาง, รับของ, ยกเลิก) ล็อกแถวใน transaction แล้วตรวจสถานะก่อนทำ กดซ้ำหรือส่งซ้ำพร้อมกันก็ตัด/เพิ่มสต็อกครั้งเดียว และจัดรถคันเดียวกันให้ 2 เที่ยวพร้อมกันไม่ได้
 - **ล็อกอิน:** token (JWT) อยู่ใน cookie แบบ `httpOnly` + `SameSite=Lax` (`Secure` เมื่อ production), อายุ 12 ชม., ล็อกอินผิดเกิน 5 ครั้ง/อีเมล หรือ 30 ครั้ง/IP ใน 15 นาที ถูกบล็อกชั่วคราว, Admin ตั้งรหัสใหม่ให้ใคร เครื่องที่ล็อกอินด้วยรหัสเก่าของคนนั้นถูกออกทันที, production ไม่ยอมเปิดถ้า `SECRET` สั้นกว่า 32 ตัวหรือเป็นค่าตัวอย่าง
 - **สิทธิ์:** สาขาเห็นเฉพาะข้อมูลสาขาตัวเอง (ตรวจฝั่ง server), Socket.io แยกห้อง `ops` / `branch:<id>` / `driver:<id>` สาขาจึงไม่เห็นพิกัดรถที่ไม่ได้มาสาขาตัวเอง
+
+## ฐานข้อมูล
+
+MySQL 8 (หรือ MariaDB 10.6+) ทุกตารางเป็น InnoDB (รองรับ transaction และ foreign key), ตัวอักษร `utf8mb4` (ภาษาไทยและ emoji), เวลาเก็บเป็น **UTC** ละเอียดถึงมิลลิวินาที (`DATETIME(3)`) แล้วหน้าเว็บแปลงเป็นเวลาไทยตอนแสดง โครงสร้างทั้งหมดอยู่ที่ `server/db/schema.sql`
+
+### ความสัมพันธ์ของตาราง
+
+```mermaid
+erDiagram
+    branch ||--o{ user : "พนักงานสาขา"
+    branch ||--o{ branch_stock : "สต็อก"
+    product ||--o{ branch_stock : ""
+    product ||--|| warehouse_stock : "สต็อกคลัง"
+    branch ||--o{ replenish_request : "ขอเติม"
+    replenish_request ||--|{ request_item : "รายการ"
+    product ||--o{ request_item : ""
+    user ||--o{ trip : "คนขับ"
+    vehicle ||--o{ trip : "รถ"
+    vehicle |o--o{ user : "รถประจำ"
+    trip ||--|{ trip_stop : "จุดส่ง"
+    replenish_request ||--o| trip_stop : ""
+    trip ||--o{ location_ping : "พิกัด GPS"
+    branch ||--o{ pos_sale : "บิล POS"
+    product ||--o{ stock_movement : "ประวัติสต็อก"
+```
+
+### ตารางและข้อมูลที่เก็บ (14 ตาราง)
+
+| กลุ่ม | ตาราง | เก็บอะไร | คอลัมน์สำคัญ |
+|---|---|---|---|
+| องค์กร | `branch` | สาขาและคลังกลาง (`is_warehouse = 1` มีแห่งเดียว) | `code` ไม่ซ้ำ, `lat`/`lng` ใช้วางหมุดและคำนวณเส้นทาง, `active` = เปิด/ปิดสาขา |
+| | `user` | ผู้ใช้ 4 บทบาท | `email` ไม่ซ้ำ, `password` = bcrypt hash, `role`, `branch_id` (เฉพาะพนักงานสาขา), `enabled`, `password_changed`, `default_vehicle_id` (รถประจำของคนขับ) |
+| สินค้า / สต็อก | `product` | รายการสินค้า | `sku` ไม่ซ้ำ, `weight_kg` (ใช้เทียบความจุรถ), `price`, `branch_reorder_point` / `branch_max_qty` (ค่ามาตรฐานตอนเปิดสาขาใหม่) |
+| | `warehouse_stock` | สต็อกคลังกลาง 1 แถวต่อสินค้า | `qty` = ของในคลังจริง, `reserved_qty` = จองให้คำขอที่อนุมัติแล้วแต่ยังไม่ออก → **ว่างให้อนุมัติ = qty − reserved_qty** |
+| | `branch_stock` | สต็อกสาขา 1 แถวต่อสาขา×สินค้า | `qty` (ติดลบได้ ถ้าขายเกินที่ระบบรู้), `reorder_point` = จุดสั่งซื้อ, `max_qty` = เพดาน |
+| | `stock_movement` | ประวัติ **ทุก** การเปลี่ยนสต็อก (ไม่แก้ ไม่ลบ) | `branch_id` (NULL = คลังกลาง), `change` (+ เพิ่ม / − ลด), `reason`, `ref_type` + `ref_id` (ชี้ไปบิล/คำขอ/เที่ยว), `user_id` |
+| | `pos_sale` | หัวบิลจากเครื่อง POS | `bill_id` เป็น primary key → บิลเดิมส่งซ้ำบันทึกไม่ได้ (กันตัดสต็อกซ้ำ) |
+| คำขอเติม | `replenish_request` | ใบขอเติมสินค้าของสาขา | `code` เช่น RQ-2001, `source` (auto/branch/hq), `status`, `priority` (normal/urgent), `auto_submit_at`, เวลาแต่ละขั้น |
+| | `request_item` | รายการในใบขอ | `qty_requested` → `qty_approved` → `qty_received` + `qty_damaged` |
+| ขนส่ง | `vehicle` | รถขนส่ง | `plate` ไม่ซ้ำ, `capacity_kg`, `status` |
+| | `trip` | เที่ยวส่ง (คนขับ 1 คน + รถ 1 คัน) | `code` เช่น TR-0401, `status`, `started_at` / `finished_at` |
+| | `trip_stop` | จุดส่งในเที่ยว 1 จุดต่อ 1 คำขอ | `request_id` **UNIQUE** (คำขอหนึ่งอยู่ได้เที่ยวเดียว), `seq` ลำดับ, `eta`, `arrived_at` / `received_at` |
+| | `location_ping` | พิกัด GPS จากมือถือคนขับระหว่างเที่ยว | `lat`, `lng`, `speed`, `recorded_at` |
+| อื่น ๆ | `notification` | การแจ้งเตือน (กระดิ่ง) | ส่งถึง `user_id` คนเดียว หรือทั้ง `role` (+ `branch_id` สำหรับสาขา), `read_at` |
+
+### สถานะ
+
+```
+คำขอ (replenish_request.status)
+  draft ──► pending ──► approved ──► in_transit ──► received
+  (ร่าง)    (รออนุมัติ)  (จองสต็อก)    (รถออกแล้ว)     (สาขารับแล้ว)
+    │          │           │
+    └──────────┴─► cancelled (ยกเลิก)      pending ──► rejected (Admin ปฏิเสธ)
+
+เที่ยว (trip.status)
+  assigned ──► accepted ──► on_route ──► completed
+  (มอบงาน)     (คนขับรับ)    (ออกเดินทาง)   (ทุกจุดรับของครบ)
+      └───────────┴──► cancelled (ยกเลิกได้เฉพาะก่อนออก)
+
+จุดส่ง (trip_stop.status)   pending ──► arrived (คนขับถึง) ──► received (สาขารับ)
+รถ (vehicle.status)          available ⇄ in_use (ระหว่างเที่ยว) · maintenance (ส่งซ่อม) · retired (เลิกใช้)
+```
+
+### สต็อกเปลี่ยนเมื่อไหร่
+
+| เหตุการณ์ | คลัง `qty` | คลัง `reserved_qty` | สาขา `qty` | บันทึกใน `stock_movement` |
+|---|---|---|---|---|
+| รับของเข้าคลัง / เพิ่มสินค้าใหม่ | + | | | `purchase` |
+| POS ขาย | | | − | `sale` (อ้างบิล) |
+| สาขาแจ้งของเสีย/หมดอายุ | | | − | `waste` |
+| สาขานับสต็อก (ปรับยอด) | | | ± ส่วนต่าง | `adjust` |
+| Admin อนุมัติคำขอ | | + | | (ไม่บันทึก ของยังไม่ขยับ) |
+| ยกเลิกคำขอที่อนุมัติแล้ว | | − | | (คืนยอดจอง) |
+| คนขับกด "ออกเดินทาง" | − | − | | `dispatch` (อ้างเที่ยว) |
+| สาขากด "รับของ" | | | + เฉพาะของดี | `receive` (อ้างคำขอ) |
+
+ของเสียตอนรับ (`qty_damaged`) และของขาด (ส่งมาน้อยกว่าที่อนุมัติ) ไม่เข้าสต็อกสาขา แต่บันทึกไว้ใน `request_item` และแจ้ง Admin
+
+### กันข้อมูลผิดพลาด
+
+- **ห้ามซ้ำด้วยโครงสร้างตาราง:** `pos_sale.bill_id` (บิล POS), `trip_stop.request_id` (คำขอเข้าได้เที่ยวเดียว), `branch_stock (branch_id, product_id)`, `user.email`, `product.sku`, `branch.code`, `vehicle.plate`, `replenish_request.code`, `trip.code` ถ้าบันทึกซ้ำพร้อมกัน API ตอบ 409
+- **ทำพร้อมกัน:** ทุกขั้นที่แตะสต็อกทำใน transaction และล็อกแถว (`SELECT … FOR UPDATE`) ก่อนเช็คสถานะ กดซ้ำหรือ 2 คนทำพร้อมกันก็มีแค่ครั้งเดียวที่สำเร็จ
+- **ไม่ลบข้อมูลจริง:** ปิดสาขา (`branch.active = 0`), ปิดบัญชี (`user.enabled = 0`), เลิกใช้รถ (`vehicle.status = 'retired'`) ประวัติคำขอ เที่ยว และยอดขายเก่ายังครบ ยกเว้นยกเลิกเที่ยวจะลบ `trip_stop` ของเที่ยวนั้น เพื่อให้คำขอกลับไปจัดเที่ยวใหม่ได้
+- **รหัสผ่าน:** เก็บเฉพาะ bcrypt hash, `password_changed` ใช้ยกเลิก token ที่ออกก่อน Admin ตั้งรหัสใหม่
+
+### Index
+
+| ตาราง | index | ใช้กับ |
+|---|---|---|
+| `replenish_request` | `(branch_id, status)` | รายการคำขอของสาขา / ตามสถานะ |
+| `stock_movement` | `(branch_id, product_id, created_at)` | ประวัติสต็อกของสินค้าในสาขา |
+| `location_ping` | `(trip_id, recorded_at)` | ตำแหน่งล่าสุด / เส้นทางของเที่ยว |
+| `notification` | `(role, branch_id, user_id, created_at)` | กระดิ่งของแต่ละคน |
+
+### อัปเกรดโครงสร้าง (migration)
+
+ตอนเปิด server `server/services/migrate.js` เช็คแล้วเพิ่มเฉพาะส่วนที่ฐานข้อมูลเดิมยังไม่มี (รันซ้ำได้ ไม่ลบข้อมูล):
+
+- `vehicle.status` เพิ่ม `retired`
+- `user.default_vehicle_id`, `user.password_changed`
+- `replenish_request.status` เพิ่ม `cancelled`
+- `branch.active`
+- `product.branch_reorder_point` / `branch_max_qty` (เติมค่าจากค่าเฉลี่ยของสาขาที่มีอยู่)
+
+ฐานข้อมูลใหม่จาก `db:reset` / `db:small` / `db:empty` ได้โครงสร้างล่าสุดจาก `schema.sql` เลย
+
+> `location_ping` เพิ่มทุก 5–10 วินาทีต่อรถที่กำลังวิ่ง ถ้าใช้งานจริงระยะยาว ควรตั้งงานลบพิกัดของเที่ยวที่จบเกิน 30–90 วัน
 
 ## หมายเหตุ
 
