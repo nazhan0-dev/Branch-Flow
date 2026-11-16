@@ -76,7 +76,7 @@ npm run dev                 # http://localhost:5173
 
 | บทบาท | ชื่อ | อีเมล | รหัสผ่าน |
 |---|---|---|---|
-| คลังกลาง (Admin) | อรทัย คลังกลาง | admin@bl.test | Demo@1234 |
+| คลังกลาง (Admin) | นัส คลังกลาง | admin@bl.test | Demo@1234 |
 | ผู้บริหาร | อา ผู้บริหาร | exec@bl.test | Demo@1234 |
 | พนักงานสาขา | สาขาบางนา | bangna@bl.test | Demo@1234 |
 | พนักงานสาขา | สาขาบางบอน | bangbon@bl.test | Demo@1234 |
