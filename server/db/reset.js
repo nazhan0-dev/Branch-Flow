@@ -1,7 +1,7 @@
 // สร้างตารางใหม่ทั้งหมดและใส่ข้อมูลตัวอย่าง  ⚠️ ข้อมูลเดิมในฐานข้อมูลจะหายทั้งหมด
 // ใช้งาน: npm run db:reset        (ชุดเต็ม 14 สาขา)
 //        npm run db:small        (ชุดเล็ก 2 สาขา 3 สินค้า สำหรับทำความเข้าใจ flow)
-//        npm run db:empty        (ว่างเปล่า: เหลือคลังกลาง + บัญชี Admin และผู้บริหาร ให้ Admin ตั้งค่าเองทั้งหมด)
+//        npm run db:empty        (เริ่มใหม่: คลังกลาง + สาขาบางนา/บางบอน + บัญชี Admin, ผู้บริหาร, สาขา 2, คนขับ 2 ไม่มีสินค้า/รถ)
 try { process.loadEnvFile(require('path').join(__dirname, '..', '.env')) } catch {}
 const fs = require('fs')
 const path = require('path')
@@ -81,9 +81,20 @@ if (SMALL) {
     USERS.splice(0, USERS.length, ...USERS.filter((u) => ['admin@bl.test', 'exec@bl.test', 'ramintra@bl.test', 'latkrabang@bl.test', 'somchai@bl.test'].includes(u[0])))
     VEHICLES.splice(1)
 }
-// ===== เริ่มจากศูนย์: เหลือคลังกลาง + บัญชี Admin และผู้บริหาร =====
-// ไม่มีสาขา สินค้า รถ คนขับ คำขอ หรือยอดขาย: Admin เพิ่มสินค้า (สต็อกคลังกลาง), รถ/คนขับ (รถและคนขับ), สาขา/พนักงาน (สาขา) เองจากหน้าเว็บ
+// ===== เริ่มใหม่: คลังกลาง + 2 สาขา + บัญชี Admin, ผู้บริหาร, พนักงานสาขา 2, คนขับ 2 =====
+// ไม่มีสินค้า รถ คำขอ หรือยอดขาย: Admin เพิ่มสินค้า (สต็อกคลังกลาง) และรถ (รถและคนขับ) เองจากหน้าเว็บ
 const EMPTY = process.argv.includes('--empty')
+const EMPTY_BRANCHES = [
+    ['B0001', 'บางนา', 'กรุงเทพฯ และปริมณฑล', 'ถ.บางนา-ตราด แขวงบางนา เขตบางนา กรุงเทพฯ', 13.668300, 100.604700, 0],
+    ['B0002', 'บางบอน', 'กรุงเทพฯ และปริมณฑล', 'ถ.เอกชัย แขวงบางบอน เขตบางบอน กรุงเทพฯ', 13.659400, 100.405500, 0],
+]
+// [อีเมล, ชื่อ, บทบาท, รหัสสาขา, เบอร์]
+const EMPTY_USERS = [
+    ['bangna@bl.test', 'พนักงาน สาขาบางนา', 'branch', 'B0001', '081-000-0201'],
+    ['bangbon@bl.test', 'พนักงาน สาขาบางบอน', 'branch', 'B0002', '081-000-0202'],
+    ['ris@bl.test', 'ริส', 'driver', null, '089-000-0301'],
+    ['rif@bl.test', 'ริฟ', 'driver', null, '089-000-0302'],
+]
 
 // [qty, จุดสั่ง, สูงสุด] ของชุดเล็ก
 const SMALL_STOCK = {
@@ -102,12 +113,14 @@ async function main() {
 
     const c = admin
     if (EMPTY) {
-        await c.query('INSERT INTO branch (code, name, region, address, lat, lng, is_warehouse) VALUES ?', [[BRANCHES[0]]])
-        const keep = USERS.filter((u) => ['admin', 'executive'].includes(u[2]))
+        await c.query('INSERT INTO branch (code, name, region, address, lat, lng, is_warehouse) VALUES ?', [[BRANCHES[0], ...EMPTY_BRANCHES]])
+        const [rows] = await c.query('SELECT id, code FROM branch')
+        const bid = Object.fromEntries(rows.map((b) => [b.code, b.id]))
+        const keep = [...USERS.filter((u) => ['admin', 'executive'].includes(u[2])), ...EMPTY_USERS]
         const hash = await bcrypt.hash(PASSWORD, 10)
-        await c.query('INSERT INTO user (email, password, name, role, phone) VALUES ?', [keep.map(([e, n, r, , ph]) => [e, hash, n, r, ph])])
+        await c.query('INSERT INTO user (email, password, name, role, branch_id, phone) VALUES ?', [keep.map(([e, n, r, b, ph]) => [e, hash, n, r, b ? bid[b] : null, ph])])
         await c.end()
-        console.log(`สร้างฐานข้อมูล ${dbName} แบบว่าง: เหลือคลังกลาง ยังไม่มีสาขา สินค้า รถ และคนขับ`)
+        console.log(`สร้างฐานข้อมูล ${dbName} ใหม่: คลังกลาง + สาขาบางนา, บางบอน ยังไม่มีสินค้า รถ คำขอ และยอดขาย`)
         console.log(`รหัสผ่าน: ${PASSWORD}`)
         console.log(keep.map(([e, n, r]) => `  ${r.padEnd(9)} ${e}  (${n})`).join('\n'))
         return
